@@ -9,8 +9,9 @@
 
 #include "recupera_pag_web_lib.h"
 
-int main()
+int main(int argc, char *argv[])
 {
-  params_is_valid();
+
+  params_is_valid(argc, argv);
   return 0;
 }
