@@ -1,6 +1,6 @@
 DIR =.
 CC=gcc
-CFLAGS=-I.
+CFLAGS=-g 
 
 ODIR=.
 LDIR =.
