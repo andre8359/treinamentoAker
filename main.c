@@ -1,4 +1,4 @@
-/*i
+/*!
  * \file   main.c
  * \brief  arquivo de implementação do recuperador de paginas WEB
  * \data 11/07/2016
@@ -20,5 +20,5 @@ int main(int argc, char *argv[])
     show_error_message(ret);
     exit(1);    
   }
- ret = download_file(argv);  
+ //ret = download_file(argv);  
 }
