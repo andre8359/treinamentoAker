@@ -21,7 +21,8 @@
 #define ERROR_PARAM_BAD_FORMULATED_FLAG -3
 #define ERROR_PARAM_BAD_FORMULATED_FILENAME -4
 #define ERROR_PARAM_BAD_FOUMUALTED_FILE_EXIST -5
-#define ERROR_NAME_SERVICE_NOT_KNOW -6
+#define ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED -6
+#define ERROR_NAME_SERVICE_NOT_KNOW -7
 #define ERROR -10
 #define BUFSIZE 256
 
@@ -34,7 +35,6 @@
 int params_is_valid(int n_args, char **args_list)
 {
   char *str = NULL, ch = '/';
-  int ret;
     
   if (n_args < 3 || n_args > 4)
     return ERROR_INCOMP_COMMAND_LINE;
@@ -42,22 +42,29 @@ int params_is_valid(int n_args, char **args_list)
     return ERROR_PARAM_BAD_FORMULATED_URL;
   if ((str = strrchr(args_list[1],ch)) == '\0')
     return ERROR_PARAM_BAD_FORMULATED_URL; 
-  if ((str - args_list[1]) == strlen(args_list[1]) - 1)
+  if ((unsigned)(str - args_list[1]) == (strlen(args_list[1]) - 1))
     return ERROR_PARAM_BAD_FORMULATED_URL;
   if (strncmp(args_list[1],"http://",7))
     return ERROR_PARAM_BAD_FORMULATED_URL;
-  if(strlen(args_list[2]) <= 3 && (!strncmp(args_list[2],".",3)\
+  if (strlen(args_list[2]) <= 3 && (!strncmp(args_list[2],".",3)\
     || !strncmp(args_list[2],"..",3)))
     return ERROR_PARAM_BAD_FORMULATED_FILENAME;
-  if(access(args_list[2], F_OK) != -1)
+  if (access(args_list[2], F_OK) != -1)
   {
-    if(n_args == 4)
-      if(strncmp(args_list[3],"-o",3))
+    if (n_args == 4)
+    {
+      if (strncmp(args_list[3],"-o",3))
         return ERROR_PARAM_BAD_FOUMUALTED_FILE_EXIST;
+    }
+    else 
+      return ERROR_PARAM_BAD_FOUMUALTED_FILE_EXIST;
+    if (access(args_list[2], W_OK) == -1)
+      return ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED;
   }
+  get_request(args_list[1],"","");
+  
   return 0;
 }
-
 /*!
  * \brief Mostra a mensagem de erro adequada na tela.
  * \param[in]  error  numero associado ao tipo de erro.
@@ -76,16 +83,23 @@ void show_error_message(int error)
     printf("Erro!Nome do arquivo de saida mal formulado!\n");
     break; 
   case ERROR_PARAM_BAD_FOUMUALTED_FILE_EXIST:
-    printf("Erro! O arquivo ja existe, caso deseje sobrescrever \
-      adicione a '-o' ao fim da linha de comando. \n");
+    printf("O arquivo ja existe, caso deseje sobrescrever%s",\
+      " adicione a '-o' ao fim da linha de comando. \n");
+    break;
+  case ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED:
+    printf("O arquivo informado existe e possui restricoes %s",\
+      "para escrita. \n");
     break;
   default:
-     printf("Erro!!");
+     printf("Erro!!\n");
    }
 }
 /*!
- * \brief Mostra a mensagem de erro adequada na tela.
- * \param[in]  error  numero associado ao tipo de erro.
+ * \brief Cria um socket.
+ * \param[in]  p Estrutura que contem as informacoes necessarias
+ *  para abertura do socket.
+ * \return Retona o descritor do socket em caso de sucesso ou ERROR
+ *  em caso de falha.
  */
 int create_socket(struct addrinfo *p)
 {
@@ -98,8 +112,8 @@ int create_socket(struct addrinfo *p)
   return socket_id;
 }
 /*!
- * \brief Mostra a mensagem de erro adequada na tela.
- * \param[in]  error      numero associado ao tipo de erro.
+ * \brief Seta as informacoes necessarias para criar um socket.
+ * \param[out]  hints Estruta que recebe as informacoes.
  */
 void config_connection(struct addrinfo *hints)
 {
@@ -112,10 +126,43 @@ void config_connection(struct addrinfo *hints)
  * \param[in] url  URL do arquivo para download.
  * \param[out] request String utilizada para requisicao do arquivo.
  * \param[out] root_directory URL raiz da pagina.
+ * \param[out] file_name Nome do arquivo para download.
  */
-void get_request(char *url, char *request, char *root_directory)
+ int get_request(char *url, char *request, char *file_name)
 {
-  char *temp; 
+  char *temp, *path_file;
+  int length_std_request = sizeof("GET HTTP/1.0\r\n\r\n");
+  path_file = url + 7;
+  path_file = strchr(path_file,'/');   
+  path_file++;  
+  request = (char *) malloc((length_std_request + strlen(path_file)\
+    + 1 ) * sizeof(char));
+  request[0] = '\0';
+  sprintf(request, "GET %s HTTP/1.0\r\n\r\n", path_file);
+  file_name = strrchr(path_file,'/');
+  file_name++;
+  return 0; 
+}
+/*!
+ * \brief Seta as estruturas necessarias para conexao via socket.
+ * \param[in] url URL do servidor.
+ * \param[in] hints Estrutura com as informacoes sobre a conexao.
+ * \param[out] serv_info Estrutura com as informacoes do servidor.
+ * \return 0 em caso de sucesso ou < 0 em caso de falha. 
+ */
+int get_serv_connect_info(char *url, struct addrinfo *hints, \
+  struct addrinfo *serv_info)
+{
+  int ret = 0;
+  if ((ret = getaddrinfo(url, "http", \
+    hints, &serv_info)) != 0) 
+  {
+    if(ret == EAI_NONAME)
+      return ERROR_NAME_SERVICE_NOT_KNOW;
+    else 
+      return ERROR;
+  }
+  return 0; 
 }
 /*!
  * \brief Recebe e escreve o arquivo de saida.
@@ -127,7 +174,7 @@ void get_request(char *url, char *request, char *root_directory)
 int write_file(int socket_id, char *file_name, char *file_param)
 {
   int begin_file = 0, ret = 1;
-  char bufin[BUFSIZE], *file_content;
+  char bufin[BUFSIZE], *file_content, *request, *file_name_downloaded;
   FILE* fout;
   
   fout = fopen(file_name, file_param);
@@ -138,8 +185,7 @@ int write_file(int socket_id, char *file_name, char *file_param)
     return ERROR;
   }
   memset(bufin,0,BUFSIZE);
-  char request[] = "GET cc32fw64.patch HTTP/1.0\r\n\r\n";
-  send(socket_id, &request,strlen(request),0);
+  
 
   while ((ret = recv(socket_id, &bufin, BUFSIZE,0)) > 0) 
   {    
@@ -167,7 +213,7 @@ int write_file(int socket_id, char *file_name, char *file_param)
   return 0;
 }
 /*!
- * \brief Abre um socket, conecta-se e tenta realizar o download
+ * \brief Abre um socket, conecta-se e realizar o download
  *  do arquivo especificado pelo args_list.          
  * \param[in]  args_list   strings que determinam o endereco da
  *  pagina e do arquivo. 
@@ -176,15 +222,10 @@ int write_file(int socket_id, char *file_name, char *file_param)
 int download_file(char **args_list, int num_args)
 {
   int socket_id, ret;
-  struct addrinfo hints, *servinfo, *p;
-  char file_info[3];  
+  struct addrinfo hints, *servinfo = NULL, *p;
+  char *request, *downloaded_file_name;  
   config_connection(&hints); 
-  if ((ret = getaddrinfo(args_list[1], "http", \
-    &hints, &servinfo)) != 0) 
-  {
-    printf("%s - %d\n", gai_strerror(ret), ret);
-    return ERROR;
-  }   
+  ret = get_serv_connect_info(args_list[1])
   for (p = servinfo; p != NULL; p = p->ai_next) 
   {
     if ((socket_id = create_socket(p)) < 0)
@@ -199,8 +240,12 @@ int download_file(char **args_list, int num_args)
   if (p == NULL)
   {
     printf("Nao foi possivel conectar.\n"); 
-    return ERROR;
+    return ERROR;  
   }
+  ret = get_request(args_list[1],request,downloaded_file_name);
+  send(socket_id, &request,strlen(request),0); 
   write_file(socket_id,args_list[2],"w");
+
+  free(request);
   return 0;
 }

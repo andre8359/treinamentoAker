@@ -18,7 +18,8 @@ int main(int argc, char *argv[])
   if (ret < 0)
   { 
     show_error_message(ret);
-    exit(1);    
+    return 0;    
   }
  //ret = download_file(argv);  
+  return 0;
 }
