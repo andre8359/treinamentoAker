@@ -21,7 +21,7 @@
 #define ERRROR_SERVER_UNAUTHORIZED 401
 #define ERROR_SERVER_FORBIDDEN 403
 #define ERROR_SERVER_NOT_FOUND 404
-#define BUFSIZE 8
+#define BUFSIZE 1
 /*!
  * \brief Realiza a validacao dos parametros de entrada
  * \param[in]  n_args      numero de argumentos passados
@@ -71,40 +71,41 @@ void show_error_message(int error)
     printf("Linha de comando incompleta: ./prog <URI> <arquivo_de_saida>\n");
     break;
   case ERROR_PARAM_BAD_FORMULATED_URL:
-    printf("Erro! URL mal formulada.\n");
+    printf("\nErro! URL mal formulada.\n");
     break;
   case ERROR_PARAM_BAD_FORMULATED_FILENAME:
-    printf("Erro!Nome do arquivo de saida mal formulado!\n");
+    printf("\nErro!Nome do arquivo de saida mal formulado!\n");
     break; 
   case ERROR_PARAM_BAD_FOUMUALTED_FILE_EXIST:
-    printf("O arquivo ja existe, caso deseje sobrescrever%s",\
+    printf("\nO arquivo ja existe, caso deseje sobrescrever%s",\
       " adicione a '-o' ao fim da linha de comando. \n");
     break;
   case ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED:
-    printf("O arquivo informado existe e possui restricoes %s",\
+    printf("\nO arquivo informado existe e possui restricoes %s",\
       "para escrita. \n");
     break;
   case ERROR_NAME_SERVICE_NOT_KNOW:
-    printf("Erro!Servidor desconhecido!\n");
+    printf("\nErro!Servidor desconhecido!\n");
     break;
   case ERROR_SERVER_MOVE_PERM:
-    printf("Erro!Servidor movido permanentemente!\n");
+    printf("\nErro!Servidor movido permanentemente!\n");
     break;
   case ERROR_SERVER_MOVE_TEMP:
-    printf("Erro!Servidor movido temporariamente!\n");
+    printf("\nErro!Servidor movido temporariamente!\n");
     break;
   case ERROR_SERVER_BAD_REQUEST:
-    printf("Erro!Parametros mal formulados.\n");
+    printf("\nErro!Parametros mal formulados.\n");
     break;
   case ERRROR_SERVER_UNAUTHORIZED:
-    printf("Erro!Conexao nao autorizada.\n");
+    printf("\nErro!Conexao nao autorizada.\n");
     break;
   case ERROR_SERVER_FORBIDDEN:
-    printf("Erro!Conexao proibida.\n");
+    printf("\nErro!Conexao proibida.\n");
     break;
   case ERROR_SERVER_NOT_FOUND:
-    printf("Erro!Servido nao encontrado."); 
-   default:
+    printf("\nErro!Servido nao encontrado.\n"); 
+    break; 
+  default:
      printf("Erro!!\n");
    }
 }
@@ -223,7 +224,7 @@ int get_header(char *file_name)
   char ch, end_header[] ={'a','a','a','a'}, begin_body = 0;
   int i = 0, status_request = 0;
   FILE *fout = fopen(file_name,"r");
-  FILE *ftemp = fopen("temp_file","w");
+  FILE *ftemp = fopen(".temp_file","w");
   if (fout == NULL)
     return ERROR;
   if (ftemp == NULL)
@@ -233,7 +234,8 @@ int get_header(char *file_name)
   {
     fclose(fout);
     fclose(ftemp);
-    system("rm -irf temp_file");
+    remove(file_name);
+    remove(".temp_file");
 
     return status_request;
   }
@@ -263,7 +265,7 @@ int get_header(char *file_name)
   fclose(ftemp);
   fclose(fout);
   remove(file_name);
-  rename("temp_file",file_name);
+  rename(".temp_file",file_name);
   return 0;
 }
 /*!

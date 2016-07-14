@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     return 0;    
   }
   ret = download_file(argv);
-  if (ret < 0)
+  if (ret != 0)
   {
     show_error_message(ret);
     return 0;
