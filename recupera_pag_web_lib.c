@@ -105,7 +105,7 @@ void show_error_message(int error)
     printf("\nErro!Servido nao encontrado.\n"); 
     break; 
   default:
-     printf("Erro!!\n");
+     printf("Erro!! -- %d\n", error);
    }
 }
 /*!
@@ -220,14 +220,14 @@ int write_file(int socket_id, char *file_name)
 int get_header(char *file_name)
 {
   char ch, end_header[] ={'a','a','a','a'}, begin_body = 0;
-  int i = 0, status_request = 0;
+  int i = 0, status_request = 0, version = 0;
   FILE *fout = fopen(file_name,"r");
   FILE *ftemp = fopen(".temp_file","w");
   if (fout == NULL)
     return ERROR;
   if (ftemp == NULL)
     return ERROR; 
-  fscanf(fout,"HTTP/1.0 %d ", &status_request); 
+  fscanf(fout,"HTTP/1.%d %d ",&version, &status_request); 
   if (status_request != 200)
   {
     fclose(fout);
