@@ -40,7 +40,7 @@ int params_is_valid(int n_args, char **args_list)
     return ERROR_INCOMP_COMMAND_LINE;
   if (strlen(args_list[1]) < 5)
     return ERROR_PARAM_BAD_FORMULATED_URL;
-  if ((str = strrchr(args_list[1],ch)) == '\0')
+  if ((str = strrchr(args_list[1]+7,ch)) == '\0')
     return ERROR_PARAM_BAD_FORMULATED_URL; 
   if ((unsigned)(str - args_list[1]) == (strlen(args_list[1]) - 1))
     return ERROR_PARAM_BAD_FORMULATED_URL;
@@ -61,8 +61,6 @@ int params_is_valid(int n_args, char **args_list)
     if (access(args_list[2], W_OK) == -1)
       return ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED;
   }
-  get_request(args_list[1],"","");
-  
   return 0;
 }
 /*!
@@ -89,6 +87,9 @@ void show_error_message(int error)
   case ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED:
     printf("O arquivo informado existe e possui restricoes %s",\
       "para escrita. \n");
+    break;
+  case ERROR_NAME_SERVICE_NOT_KNOW:
+    printf("Erro!Servidor desconhecido!\n");
     break;
   default:
      printf("Erro!!\n");
@@ -128,9 +129,9 @@ void config_connection(struct addrinfo *hints)
  * \param[out] root_directory URL raiz da pagina.
  * \param[out] file_name Nome do arquivo para download.
  */
- int get_request(char *url, char *request, char *file_name)
+ char *get_request(char *url)
 {
-  char *temp, *path_file;
+  char *path_file, *request;
   int length_std_request = sizeof("GET HTTP/1.0\r\n\r\n");
   path_file = url + 7;
   path_file = strchr(path_file,'/');   
@@ -138,10 +139,10 @@ void config_connection(struct addrinfo *hints)
   request = (char *) malloc((length_std_request + strlen(path_file)\
     + 1 ) * sizeof(char));
   request[0] = '\0';
-  sprintf(request, "GET %s HTTP/1.0\r\n\r\n", path_file);
-  file_name = strrchr(path_file,'/');
-  file_name++;
-  return 0; 
+  strncpy(request,"GET ", strlen("GET ") + 1); 
+  strncat(request, path_file, strlen(path_file) + 1);
+  strncat(request," HTTP/1.0\r\n\r\n", strlen(" HTTP/1.0\r\n\r\n") + 1);
+  return request; 
 }
 /*!
  * \brief Seta as estruturas necessarias para conexao via socket.
@@ -151,11 +152,11 @@ void config_connection(struct addrinfo *hints)
  * \return 0 em caso de sucesso ou < 0 em caso de falha. 
  */
 int get_serv_connect_info(char *url, struct addrinfo *hints, \
-  struct addrinfo *serv_info)
+  struct addrinfo **serv_info)
 {
   int ret = 0;
   if ((ret = getaddrinfo(url, "http", \
-    hints, &serv_info)) != 0) 
+    hints, serv_info)) != 0) 
   {
     if(ret == EAI_NONAME)
       return ERROR_NAME_SERVICE_NOT_KNOW;
@@ -174,7 +175,7 @@ int get_serv_connect_info(char *url, struct addrinfo *hints, \
 int write_file(int socket_id, char *file_name, char *file_param)
 {
   int begin_file = 0, ret = 1;
-  char bufin[BUFSIZE], *file_content, *request, *file_name_downloaded;
+  char bufin[BUFSIZE], *file_content;
   FILE* fout;
   
   fout = fopen(file_name, file_param);
@@ -222,11 +223,20 @@ int write_file(int socket_id, char *file_name, char *file_param)
 int download_file(char **args_list, int num_args)
 {
   int socket_id, ret;
-  struct addrinfo hints, *servinfo = NULL, *p;
-  char *request, *downloaded_file_name;  
+  struct addrinfo hints, *serv_info, *p;
+  char *request = NULL, *url_serv = NULL;  
   config_connection(&hints); 
-  ret = get_serv_connect_info(args_list[1])
-  for (p = servinfo; p != NULL; p = p->ai_next) 
+  url_serv = (char *) malloc((strlen(args_list[1]) + 1) * sizeof(char));
+  url_serv[0] = '\0';
+  strncpy(url_serv,args_list[1] + 7, strlen(args_list[1] + 1));
+  url_serv[(unsigned) (strchr(url_serv,'/') - url_serv )] = '\0'; 
+  ret = get_serv_connect_info (url_serv, &hints, &serv_info);
+  if (ret < 0)
+  {
+    free(url_serv);
+    return ret;
+  }
+  for (p = serv_info; p != NULL; p = p->ai_next) 
   {
     if ((socket_id = create_socket(p)) < 0)
       continue;
@@ -240,12 +250,15 @@ int download_file(char **args_list, int num_args)
   if (p == NULL)
   {
     printf("Nao foi possivel conectar.\n"); 
+    free(url_serv);
+    freeaddrinfo(serv_info);
     return ERROR;  
   }
-  ret = get_request(args_list[1],request,downloaded_file_name);
-  send(socket_id, &request,strlen(request),0); 
+  request = get_request(args_list[1]);
+  send(socket_id, request, strlen(request),0); 
   write_file(socket_id,args_list[2],"w");
-
+  free(url_serv);
+  freeaddrinfo(serv_info);
   free(request);
   return 0;
 }
