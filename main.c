@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
     show_error_message(ret);
     return 0;    
   }
-  ret = download_file(argv,argc);
+  ret = download_file(argv);
   if (ret < 0)
   {
     show_error_message(ret);

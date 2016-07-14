@@ -24,8 +24,8 @@
 #define ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED -6
 #define ERROR_NAME_SERVICE_NOT_KNOW -7
 #define ERROR -10
-#define BUFSIZE 256
-
+#define BUFSIZE 8
+#define SIZE_HEADER_BREAK 8
 /*!
  * \brief Realiza a validacao dos parametros de entrada
  * \param[in]  n_args      numero de argumentos passados
@@ -172,45 +172,84 @@ int get_serv_connect_info(char *url, struct addrinfo *hints, \
  * \param[in] file_param Parametro de abertura do arquivo de saida.
  * \return 0 em caso de sucesso ou < 0 em caso de falha. 
  */
-int write_file(int socket_id, char *file_name, char *file_param)
+int write_file(int socket_id, char *file_name)
 {
-  int begin_file = 0, ret = 1;
-  char bufin[BUFSIZE], *file_content;
+  int  ret = 1;
+  char bufin[BUFSIZE];
   FILE* fout;
-  
-  fout = fopen(file_name, file_param);
-  
+  fout = fopen(file_name, "w");
   if (fout == NULL)
   {
     printf("Nao foi possivel abrir arquivo de saida!");
     return ERROR;
   }
-  memset(bufin,0,BUFSIZE);
-  
-
+  memset((char *)&bufin, 0, BUFSIZE);
   while ((ret = recv(socket_id, &bufin, BUFSIZE,0)) > 0) 
-  {    
-    if (!begin_file)
-    {
-      file_content = strstr(bufin, "\r\n\r\n");
-      if (file_content != NULL)
-      {
-        begin_file = 1;
-        file_content += 4;
-      }
-    }
-    else
-      file_content = bufin;
-    if (begin_file) 
-      fprintf(fout,"%s",file_content);
-   else
-     printf("%s",bufin);
-   memset(bufin, 0, BUFSIZE);
+  {
+    fprintf(fout,"%s", bufin);
+    memset((char *)&bufin, 0, BUFSIZE);
   }
   if (ret < 0)
+  {
     printf("Erro durante o download!");
+    fclose(fout);
+    return ERROR;
+  }
+  
   close(socket_id);
   fclose(fout);  
+  return 0;
+}
+/*!
+ * \brief Retira o cabecalho do HTTP do arquivo de saida.
+ * \param[in]  file_name Nome do arquivo de saida.
+ * \return  0 em caso de parametros validos <0 caso parametros 
+ */
+int get_header(char *file_name)
+{
+  char ch, end_header[] ={'a','a','a','a'}, begin_body = 0;
+  int i = 0, status_request = 0;
+  FILE *fout = fopen(file_name,"r");
+  FILE *ftemp = fopen("temp_file","w");
+  if (fout == NULL)
+    return ERROR;
+  if (ftemp == NULL)
+    return ERROR; 
+  fscanf(fout,"HTTP/1.0 %d ", &status_request); 
+  if (status_request != 200)
+  {
+    fclose(fout);
+    fclose(ftemp);
+    system("rm -irf temp_file");
+
+    return status_request;
+  }
+  while (!feof(fout) && !ferror(fout))
+  {
+    if (begin_body)
+    {
+      ch = fgetc(fout);
+      if (ch != EOF)
+        putc(ch,ftemp);
+    }
+    else
+    {
+      ch = getc(fout);
+      end_header[i] = ch;
+      if (!strncmp(end_header,"\r\n\r\n", 4))
+        begin_body = 1;
+      if (i == 3)
+      {
+        end_header[0] = end_header[1];
+        end_header[1] = end_header[2];
+        end_header[2] = end_header[3];
+      }
+      else 
+        i++;
+    }    
+  }
+  fclose(ftemp);
+  fclose(fout);
   return 0;
 }
 /*!
@@ -220,7 +259,8 @@ int write_file(int socket_id, char *file_name, char *file_param)
  *  pagina e do arquivo. 
  * \return  0 em caso de parametros validos <0 caso parametros 
  */
-int download_file(char **args_list, int num_args)
+
+int download_file(char **args_list)
 {
   int socket_id, ret;
   struct addrinfo hints, *serv_info, *p;
@@ -256,7 +296,8 @@ int download_file(char **args_list, int num_args)
   }
   request = get_request(args_list[1]);
   send(socket_id, request, strlen(request),0); 
-  write_file(socket_id,args_list[2],"w");
+  write_file(socket_id,args_list[2]);
+  get_header(args_list[2]);  
   free(url_serv);
   freeaddrinfo(serv_info);
   free(request);

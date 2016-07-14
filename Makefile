@@ -1,16 +1,9 @@
 DIR =.
 CC=gcc
+CFLAGS=-I.
 
 ODIR=.
 LDIR =.
-
-CFLAGS=-Wall -Wextra
-
-ifdef RELEASE
-	CFLAGS += -O2
-else
-	CFLAGS += -ggdb3 -fsanitize=address
-endif
 
 LIBS=-lm
 
@@ -18,8 +11,9 @@ _DEPS = recupera_pag_web_lib.h
 
 OBJ = main.o recupera_pag_web_lib.o 
 
+
 %.o: %.c $(DEPS)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 prog: $(OBJ)
 	gcc -o $@ $^ $(CFLAGS) $(LIBS)
