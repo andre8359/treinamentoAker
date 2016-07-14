@@ -5,15 +5,6 @@
  * \datae 11/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <limits.h>
 #include "recupera_pag_web_lib.h"
 
 #define ERROR_INCOMP_COMMAND_LINE -1 
@@ -24,8 +15,13 @@
 #define ERROR_PARAM_BAD_FOUMUALTED_FILE_ACCESS_DENIED -6
 #define ERROR_NAME_SERVICE_NOT_KNOW -7
 #define ERROR -10
+#define ERROR_SERVER_MOVE_PERM 301
+#define ERROR_SERVER_MOVE_TEMP 302
+#define ERROR_SERVER_BAD_REQUEST 400
+#define ERRROR_SERVER_UNAUTHORIZED 401
+#define ERROR_SERVER_FORBIDDEN 403
+#define ERROR_SERVER_NOT_FOUND 404
 #define BUFSIZE 8
-#define SIZE_HEADER_BREAK 8
 /*!
  * \brief Realiza a validacao dos parametros de entrada
  * \param[in]  n_args      numero de argumentos passados
@@ -91,7 +87,24 @@ void show_error_message(int error)
   case ERROR_NAME_SERVICE_NOT_KNOW:
     printf("Erro!Servidor desconhecido!\n");
     break;
-  default:
+  case ERROR_SERVER_MOVE_PERM:
+    printf("Erro!Servidor movido permanentemente!\n");
+    break;
+  case ERROR_SERVER_MOVE_TEMP:
+    printf("Erro!Servidor movido temporariamente!\n");
+    break;
+  case ERROR_SERVER_BAD_REQUEST:
+    printf("Erro!Parametros mal formulados.\n");
+    break;
+  case ERRROR_SERVER_UNAUTHORIZED:
+    printf("Erro!Conexao nao autorizada.\n");
+    break;
+  case ERROR_SERVER_FORBIDDEN:
+    printf("Erro!Conexao proibida.\n");
+    break;
+  case ERROR_SERVER_NOT_FOUND:
+    printf("Erro!Servido nao encontrado."); 
+   default:
      printf("Erro!!\n");
    }
 }
@@ -183,11 +196,11 @@ int write_file(int socket_id, char *file_name)
     printf("Nao foi possivel abrir arquivo de saida!");
     return ERROR;
   }
-  memset((char *)&bufin, 0, BUFSIZE);
-  while ((ret = recv(socket_id, &bufin, BUFSIZE,0)) > 0) 
+  memset(bufin, 0, BUFSIZE);
+  while ((ret = recv(socket_id, bufin, BUFSIZE,0)) > 0) 
   {
-    fprintf(fout,"%s", bufin);
-    memset((char *)&bufin, 0, BUFSIZE);
+    fwrite(bufin,1,ret,fout );
+    memset(bufin, 0, BUFSIZE);
   }
   if (ret < 0)
   {
@@ -197,7 +210,7 @@ int write_file(int socket_id, char *file_name)
   }
   
   close(socket_id);
-  fclose(fout);  
+  fclose(fout);
   return 0;
 }
 /*!
@@ -228,13 +241,12 @@ int get_header(char *file_name)
   {
     if (begin_body)
     {
-      ch = fgetc(fout);
-      if (ch != EOF)
-        putc(ch,ftemp);
+      if (fread(&ch,1,1,fout) != 0)
+        fwrite(&ch,1,1,ftemp);
     }
     else
     {
-      ch = getc(fout);
+      fread(&ch,1,1,fout);
       end_header[i] = ch;
       if (!strncmp(end_header,"\r\n\r\n", 4))
         begin_body = 1;
@@ -250,6 +262,8 @@ int get_header(char *file_name)
   }
   fclose(ftemp);
   fclose(fout);
+  remove(file_name);
+  rename("temp_file",file_name);
   return 0;
 }
 /*!
@@ -297,9 +311,10 @@ int download_file(char **args_list)
   request = get_request(args_list[1]);
   send(socket_id, request, strlen(request),0); 
   write_file(socket_id,args_list[2]);
-  get_header(args_list[2]);  
+  ret = get_header(args_list[2]);  
   free(url_serv);
   freeaddrinfo(serv_info);
   free(request);
-  return 0;
+  
+  return ret;
 }
