@@ -1,12 +1,11 @@
 /*!
- * \file   recupera_pag_web.c
+ * \file   recupera_pag_web_lib.c
  * \brief  arquivo de implementação das funcoes para o  recuperador de 
            paginas WEB
  * \datae 11/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include "recupera_pag_web_lib.h"
-
 #define ERROR_INCOMP_COMMAND_LINE -1 
 #define ERROR_PARAM_BAD_FORMULATED_URL -2
 #define ERROR_PARAM_BAD_FORMULATED_FLAG -3
@@ -113,8 +112,8 @@ void show_error_message(int error)
  * \brief Cria um socket.
  * \param[in]  p Estrutura que contem as informacoes necessarias
  *  para abertura do socket.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR
- *  em caso de falha.
+ * \return Retona o descritor do socket em caso de sucesso ou 
+ *  ERROR em caso de falha.
  */
 int create_socket(struct addrinfo *p)
 {
@@ -139,13 +138,12 @@ void config_connection(struct addrinfo *hints)
 /*!
  * \brief Monta a string para requisicao do arquivo.
  * \param[in] url  URL do arquivo para download.
- * \param[out] request String utilizada para requisicao do arquivo.
- * \param[out] root_directory URL raiz da pagina.
- * \param[out] file_name Nome do arquivo para download.
+ * \return Ponteiro para string de requisicao em caso de sucesso 
+ *  ou NULL caso fracasso.
  */
- char *get_request(char *url)
+char *get_request(char *url)
 {
-  char *path_file, *request;
+  char *path_file, *request = NULL;
   int length_std_request = sizeof("GET HTTP/1.0\r\n\r\n");
   path_file = url + 7;
   path_file = strchr(path_file,'/');   
@@ -217,7 +215,7 @@ int write_file(int socket_id, char *file_name)
 /*!
  * \brief Retira o cabecalho do HTTP do arquivo de saida.
  * \param[in]  file_name Nome do arquivo de saida.
- * \return  0 em caso de parametros validos <0 caso parametros 
+ * \return  0 em caso de parametros validos <0 caso parametros. 
  */
 int get_header(char *file_name)
 {
@@ -273,7 +271,7 @@ int get_header(char *file_name)
  *  do arquivo especificado pelo args_list.          
  * \param[in]  args_list   strings que determinam o endereco da
  *  pagina e do arquivo. 
- * \return  0 em caso de parametros validos <0 caso parametros 
+ * \return  0 em caso de sucesso ou o <0 em fracasso. 
  */
 
 int download_file(char **args_list)
@@ -317,6 +315,5 @@ int download_file(char **args_list)
   free(url_serv);
   freeaddrinfo(serv_info);
   free(request);
-  
   return ret;
 }
