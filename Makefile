@@ -14,7 +14,7 @@ endif
 
 LIBS=-lm
 
-_DEPS = recupera_pag_web_lib.h
+_DEPS = recupera_pag_web_lib.h recupera_pag_web_lib.c
 
 OBJ = main.o recupera_pag_web_lib.o 
 
