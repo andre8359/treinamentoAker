@@ -24,7 +24,7 @@
 #define ERRROR_SERVER_UNAUTHORIZED 401
 #define ERROR_SERVER_FORBIDDEN 403
 #define ERROR_SERVER_NOT_FOUND 404
-#define BUFSIZE 16
+#define BUFSIZE 256
 int params_is_valid(char *url, char *file_name, int overwrite_flag);
 void show_error_message(int error);
 int create_socket(struct addrinfo *p);

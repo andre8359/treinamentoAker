@@ -20,8 +20,6 @@ int params_is_valid(char *url, char *file_name, int overwrite_flag)
     return ERROR_PARAM_BAD_FORMULATED_URL;
   if (strncmp(url,"http://",7))
     return ERROR_PARAM_BAD_FORMULATED_URL;
-  if (strrchr(url + 8, '/') == NULL)
-    return ERROR_PARAM_BAD_FORMULATED_URL;
   if (strlen(file_name) <= 3 && (!strncmp(file_name, ".", 3)\
     || !strncmp(file_name, "..", 3)))
     return ERROR_PARAM_BAD_FORMULATED_FILENAME;
@@ -122,14 +120,21 @@ char *get_request(char *url)
 {
   char *path_file, *request = NULL;
   int length_std_request = sizeof("GET HTTP/1.0\r\n\r\n");
+  int path_length = 0;
   path_file = url + 7;
   path_file = strchr(path_file,'/');   
-  path_file++;  
-  request = (char *) malloc((length_std_request + strlen(path_file)\
+  if (path_file == NULL || strlen(path_file) == 0)
+    path_length = 1;
+  else
+    path_file++;
+  request = (char *) malloc((length_std_request + path_length \
     + 1 ) * sizeof(char));
   request[0] = '\0';
-  strncpy(request,"GET ", strlen("GET ") + 1); 
-  strncat(request, path_file, strlen(path_file) + 1);
+  strncpy(request,"GET ", strlen("GET ") + 1);
+  if (path_file == NULL || strlen(path_file) == 0)
+    strncat(request,".",2);
+  else
+    strncat(request, path_file, strlen(path_file) + 1);
   strncat(request," HTTP/1.0\r\n\r\n", strlen(" HTTP/1.0\r\n\r\n") + 1);
   return request; 
 }
@@ -177,26 +182,27 @@ void get_header_info(char *header, int *request_status, \
   } 
 }   
 /*!
- * \brief Recebe e escreve o arquivo de saida.
- * \param[in] scoket_id Descritor do socket que estabelece conexao.
- * \param[in] file_name Nome do arquivo de saida.
- * \param[in] file_param Parametro de abertura do arquivo de saida.
- * \return 0 em caso de sucesso ou < 0 em caso de falha. 
+ * \brief Copia o vetor src no vertor dst
+ * \param[in] dst Vetor modificado na copia.
+ * \param[in] src Vetor que sera copiado.
+ * \param[in] begin  Indica a posicao inicial do vertor dst.
+ * \param[in] length Indica quantos elementos serao copiados
  */
-void vector_cpy (char *dst, char *src, int begin, int end)
+void vector_cpy (char *dst, char *src, int begin, int length)
 {
   int i, j = begin;
-  for (i = 0; i <= end; i++)
+  for (i = 0; i <= length; i++)
     dst[i+j] = src[i];
 }
 /*!
- * \brief Recebe e escreve o arquivo de saida.
+ * \brief Recebe as informacoes do cabecalho HTTP.
  * \param[in] scoket_id Descritor do socket que estabelece conexao.
- * \param[in] file_name Nome do arquivo de saida.
- * \param[in] file_param Parametro de abertura do arquivo de saida.
- * \return 0 em caso de sucesso ou < 0 em caso de falha. 
+ * \param[out] file_length Tamanho do arquivo de saida.
+ * \param[out] body_part Possivel parte do arquivo de saida que foi
+ *  recebida com o cabecalho.
+ * \return Ponteiro com conteudo do arquivo de saida. 
  */
-char* recive_header(int socket_id, unsigned long *file_length, \
+char* receive_header(int socket_id, unsigned long *file_length, \
   int *body_part_length)
 {
   char *bufin, *header, *header_realloc, *ch, *body_part = NULL;
@@ -218,12 +224,14 @@ char* recive_header(int socket_id, unsigned long *file_length, \
     else if ((ch = strstr(header,"\n\n")) != NULL)
     {
       ch += 2;
-
+      get_header_info(header, &request_status, file_length);
+      break;
     }
     else if ((ch = strstr(header,"\n\r\n\r")) != NULL)
     {
       ch += 4;
-
+      get_header_info(header, &request_status, file_length);
+      break;
     }
     else
       header_realloc = (char *) realloc(header, header_length + BUFSIZE + 1);
@@ -236,11 +244,20 @@ char* recive_header(int socket_id, unsigned long *file_length, \
     else
       header = header_realloc;
   }
+  if (request_status != 200)
+  {
+      if (ret == 0)
+        ret = ERROR;
+      free(header);
+      free(bufin);
+      show_error_message(ret);
+      return NULL;
+  } 
   if (strlen(ch) > 0)
   {
     *body_part_length = header_length - (ch - header); 
     body_part = (char *) malloc((*body_part_length + 1) * sizeof(char));  
-    vector_cpy(body_part, ch, 0, *body_part_length);
+    vector_cpy(body_part, ch, 0, *body_part_length - 1);
   }
   free(header);
   free(bufin);  
@@ -259,14 +276,17 @@ int write_file(int socket_id, char *file_name)
   char *bufin, *body_part = NULL;
   FILE *fout;
   unsigned long file_length = 0, downloaded_length = 0;
+  body_part = receive_header(socket_id, &file_length, &body_part_length);
+  if (body_part == NULL)
+    return ERROR;
   fout = fopen(file_name, "wb");
+
   if (fout == NULL)
   {
     printf("Nao foi possivel abrir arquivo de saida!");
     return ERROR;
   }
-  body_part = recive_header(socket_id, &file_length, &body_part_length);
-  if (body_part_length > 0)
+    if (body_part_length > 0)
     fwrite(body_part, 1, body_part_length, fout);
   free(body_part);
   bufin = (char *) malloc ((BUFSIZE) * sizeof(char));
@@ -303,8 +323,7 @@ int download_file(char *url, char *file_name)
   config_connection(&hints); 
   url_serv = (char *) malloc((strlen(url) + 1) * sizeof(char));
   url_serv[0] = '\0';
-  strncpy(url_serv, url + 7, strlen(url + 1));
-  url_serv[(unsigned) (strchr(url_serv,'/') - url_serv )] = '\0'; 
+  strncpy(url_serv, url + 7, strlen(url + 7) + 1);
   ret = get_serv_connect_info (url_serv, &hints, &serv_info);
   if (ret < 0)
   {
