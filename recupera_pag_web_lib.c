@@ -183,77 +183,106 @@ void get_header_info(char *header, int *request_status, \
  * \param[in] file_param Parametro de abertura do arquivo de saida.
  * \return 0 em caso de sucesso ou < 0 em caso de falha. 
  */
+void vector_cpy (char *dst, char *src, int begin, int end)
+{
+  int i, j = begin;
+  for (i = 0; i <= end; i++)
+    dst[i+j] = src[i];
+}
+/*!
+ * \brief Recebe e escreve o arquivo de saida.
+ * \param[in] scoket_id Descritor do socket que estabelece conexao.
+ * \param[in] file_name Nome do arquivo de saida.
+ * \param[in] file_param Parametro de abertura do arquivo de saida.
+ * \return 0 em caso de sucesso ou < 0 em caso de falha. 
+ */
+char* recive_header(int socket_id, unsigned long *file_length, \
+  int *body_part_length)
+{
+  char *bufin, *header, *header_realloc, *ch, *body_part = NULL;
+  int ret, header_length = 0, request_status = 0;
+  bufin = (char *) malloc ((BUFSIZE) * sizeof(char));
+  header = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
+  header[0] = '\0'; 
+  memset(bufin, 0, BUFSIZE);
+  while (((ret = recv(socket_id, bufin, BUFSIZE,0)) > 0)) 
+  {
+    vector_cpy(header, bufin, header_length, ret - 1);
+    header_length += ret;
+    if ((ch = strstr(header, "\r\n\r\n")) != NULL)
+    {
+      ch += 4;
+      get_header_info(header, &request_status, file_length);
+      break;
+    }
+    else if ((ch = strstr(header,"\n\n")) != NULL)
+    {
+      ch += 2;
+
+    }
+    else if ((ch = strstr(header,"\n\r\n\r")) != NULL)
+    {
+      ch += 4;
+
+    }
+    else
+      header_realloc = (char *) realloc(header, header_length + BUFSIZE + 1);
+    if (header_realloc == NULL)
+    {
+      free(bufin);
+      free(header);
+      return NULL;       
+    }
+    else
+      header = header_realloc;
+  }
+  if (strlen(ch) > 0)
+  {
+    *body_part_length = header_length - (ch - header); 
+    body_part = (char *) malloc((*body_part_length + 1) * sizeof(char));  
+    vector_cpy(body_part, ch, 0, *body_part_length);
+  }
+  free(header);
+  free(bufin);  
+  return body_part;
+}
+/*!
+ * \brief Recebe e escreve o arquivo de saida.
+ * \param[in] scoket_id Descritor do socket que estabelece conexao.
+ * \param[in] file_name Nome do arquivo de saida.
+ * \param[in] file_param Parametro de abertura do arquivo de saida.
+ * \return 0 em caso de sucesso ou < 0 em caso de falha. 
+ */
 int write_file(int socket_id, char *file_name)
 {
-  int  ret = 1;
-  char bufin[BUFSIZE], *header, *header_realloc, *ch;
+  int  ret = 1, body_part_length = 0;
+  char *bufin, *body_part = NULL;
   FILE *fout;
-  unsigned long file_length = 999999, downloaded_length = 0;
-  int end_header = 0, header_length = 0, request_status = 0;
-  fout = fopen(file_name, "w");
+  unsigned long file_length = 0, downloaded_length = 0;
+  fout = fopen(file_name, "wb");
   if (fout == NULL)
   {
     printf("Nao foi possivel abrir arquivo de saida!");
     return ERROR;
   }
-  header = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
-  header[0] = '\0'; 
+  body_part = recive_header(socket_id, &file_length, &body_part_length);
+  if (body_part_length > 0)
+    fwrite(body_part, 1, body_part_length, fout);
+  free(body_part);
+  bufin = (char *) malloc ((BUFSIZE) * sizeof(char));
   memset(bufin, 0, BUFSIZE);
-  while (((ret = recv(socket_id, bufin, BUFSIZE,0)) > 0) \
+  while (((ret = recv(socket_id, bufin, BUFSIZE,0)) > 0) 
     && (downloaded_length < file_length)) 
-  {
-    if(!end_header)
-    {
-      strncat(header, bufin, ret);
-      //fwrite(bufin, 1,ret, fout);
-      header_length += ret;
-      if ((ch = strstr(header, "\r\n\r\n")) != NULL)
-      {
-        ch += 4;
-        end_header = 1;
-        fwrite(ch, 1, strlen(ch), fout);
-        downloaded_length = strlen(ch);
-        get_header_info(header, &request_status, &file_length);
-      }
-      else if ((ch = strstr(header,"\n\n")) != NULL)
-      {
-        ch += 2;
-        end_header = 1;
-        fwrite(ch, 1, strlen(ch), fout);
-        downloaded_length = strlen(ch); 
-      }
-      else if ((ch = strstr(header,"\n\r\n\r")) != NULL)
-      {
-        end_header = 1;
-        fwrite(ch, 1, strlen(ch), fout);
-        downloaded_length = strlen(ch);
-      }
-      else
-        header_realloc = (char *) realloc(header, header_length \
-          + BUFSIZE + 1);
-      if (header_realloc == NULL)
-      {
-        free(header);
-        return ERROR;
-      }
-      else if(!end_header)
-        header = header_realloc;
-      memset(bufin, 0, BUFSIZE);  
-    }
-    else
-    {
-      fwrite(bufin, 1, ret, fout);
-      memset(bufin, 0, BUFSIZE);
-      downloaded_length += ret;
-    }   
-  }
+    fwrite(bufin,1,ret,fout);
   if (ret < 0)
   {
     printf("Erro durante o download!");
+    free(bufin);
+    close(socket_id);
     fclose(fout);
     return ERROR;
   }
-  free(header);
+  free(bufin);
   close(socket_id);
   fclose(fout);
   return 0;
