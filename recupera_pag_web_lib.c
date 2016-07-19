@@ -2,7 +2,7 @@
  * \file   recupera_pag_web_lib.c
  * \brief  arquivo de implementação das funcoes para o  recuperador de 
            paginas WEB
- * \datae 11/07/2016
+ * \date 11/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include "recupera_pag_web_lib.h"

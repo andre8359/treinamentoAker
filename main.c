@@ -1,7 +1,7 @@
 /*!
  * \file   main.c
  * \brief  arquivo de implementação do recuperador de paginas WEB
- * \data 11/07/2016
+ * \date 11/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include <stdio.h>
