@@ -126,7 +126,10 @@ char *get_request(char *url)
   if (path_file == NULL || strlen(path_file) == 0)
     path_length = 1;
   else
+  {
     path_file++;
+    path_length = strlen(path_file);
+  }  
   request = (char *) malloc((length_std_request + path_length \
     + 1 ) * sizeof(char));
   request[0] = '\0';
@@ -323,7 +326,13 @@ int download_file(char *url, char *file_name)
   config_connection(&hints); 
   url_serv = (char *) malloc((strlen(url) + 1) * sizeof(char));
   url_serv[0] = '\0';
-  strncpy(url_serv, url + 7, strlen(url + 7) + 1);
+  char *ch = strstr(url+7,"/");
+  if (ch == NULL)
+    strncpy(url_serv, url + 7, strlen(url + 7) + 1);
+  else
+    strncpy(url_serv, url + 7, strlen(url + 7) - strlen(ch));
+  url_serv[strlen(url + 7) - strlen(ch)] = '\0';
+
   ret = get_serv_connect_info (url_serv, &hints, &serv_info);
   if (ret < 0)
   {
