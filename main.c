@@ -61,6 +61,6 @@ int main(int argc, char *argv[])
     show_error_message(ret);
     return 0;
   }
-  printf("FINALIZADO!\n")
+  printf("FINALIZADO!\n");
   return 0;
 }
