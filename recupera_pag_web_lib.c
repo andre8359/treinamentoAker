@@ -16,10 +16,6 @@
 int params_is_valid(const char *url, const char *file_name, \
   const int overwrite_flag)
 {
-  if (url == NULL || file_name == NULL)
-    return ERROR_INCOMP_COMMAND_LINE;
-  if (strlen(url) < 8)
-    return ERROR_PARAM_BAD_FORMULATED_URL;
   if (strncmp(url,"http://",7))
     return ERROR_PARAM_BAD_FORMULATED_URL;
   if (strlen(file_name) <= 3 && (!strncmp(file_name, ".", 3)\
