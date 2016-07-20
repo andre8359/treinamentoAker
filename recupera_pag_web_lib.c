@@ -1,7 +1,7 @@
 /*!
  * \file   recupera_pag_web_lib.c
- * \brief  arquivo de implementação das funcoes para o  recuperador de 
-           paginas WEB
+ * \brief  Arquivo de implementação das funcoes para o  recuperador de 
+ *  paginas WEB
  * \date 11/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
@@ -179,7 +179,7 @@ void vector_cpy (char *dst, char *src, int begin, int length)
  * \param[in] request_status Representa do status da conexao.
  * \return 0 em caso de requisicao bem sucedida ou ERROR em caso de falha. 
  */
-int request_is_valid(const int  request_status)
+int request_is_valid(const int request_status)
 { 
   switch(request_status) 
   {
@@ -290,7 +290,7 @@ int write_file(const int socket_id, const char *file_name)
     printf("Nao foi possivel abrir arquivo de saida!");
     return ERROR;
   }
-    if (body_part_length > 0)
+  if (body_part_length > 0)
     fwrite(body_part, 1, body_part_length, fout);
   free(body_part);
   memset(bufin, 0, BUFSIZE);
@@ -373,5 +373,7 @@ on_error_downdload_file:
     free(url_serv);
   if (request != NULL)
     free(request);
+  if (socket_id)
+    close(socket_id);
   return ret;
 }
