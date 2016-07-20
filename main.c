@@ -10,12 +10,16 @@
 
 int main(int argc, char *argv[])
 {
-  int ret;
+  int ret = 0;
   char *url = NULL, *file_name = NULL;
   char overwrite_flag = 0; 
   int c;
   opterr = 0;
-
+  if (argc < 5)
+  {
+    show_error_message(ERROR_INCOMP_COMMAND_LINE);
+    return 0;
+  }
   while ((c = getopt(argc, argv, "ou:f:")) != -1)
   {
     switch (c)
@@ -44,13 +48,13 @@ int main(int argc, char *argv[])
       ret = ERROR_INCOMP_COMMAND_LINE;
     }
    } 
-  if (ret < 0)
+  if (ret != 0)
   { 
     show_error_message(ret);
     return 0;    
   }
   ret = params_is_valid(url, file_name, overwrite_flag);
-  if (ret < 0)
+  if (ret != 0)
   { 
     show_error_message(ret);
     return 0;    
@@ -61,6 +65,6 @@ int main(int argc, char *argv[])
     show_error_message(ret);
     return 0;
   }
-  printf("FINALIZADO!\n");
+  printf("\nFINALIZADO!\n\n");
   return 0;
 }
