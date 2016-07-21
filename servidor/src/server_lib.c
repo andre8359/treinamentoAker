@@ -36,7 +36,7 @@ void config_connection(const char *port, struct sockaddr_in *serv_info)
  * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de 
  *  falha.
  */
-int wait_connection(const char *port)
+int make_connection(const char *port)
 {
   struct sockaddr_in serv_info;
   int socket_id = 0;
@@ -49,8 +49,6 @@ int wait_connection(const char *port)
   len = sizeof(serv_info);
   if (bind(socket_id, (struct sockaddr *) &serv_info, len) < 0)
     return ERROR;
-  if (listen(socket_id, BACKLOG) < 0)
-    return ERROR; 
   return socket_id; 
 }
 /*!

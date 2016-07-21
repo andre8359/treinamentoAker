@@ -17,7 +17,7 @@
 #define BUFSIZE 256
 int create_socket(const struct sockaddr_in *p);
 void config_connection(const char *port, struct sockaddr_in *serv_info);
-int wait_connection(const char *port);
+int make_connection(const char *port);
 void close_std_file_desc();
 void open_background_process();
 #endif /* SERVER_LIB_H */
