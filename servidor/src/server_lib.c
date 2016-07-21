@@ -54,6 +54,27 @@ int make_connection(const char *port)
 /*!
  * \brief Fecha os arquivos abertos pelo padrão (STDIN, STDOUT, STDERR).
  */
+void write_to_client (struct request *r)
+{
+  char bufin[BUFSIZE];
+  int nbytes = 0;
+  if (r->header_size_sended < strlen(r->header))
+  {
+    nbytes = send(r->socket_id, r->header + r->header_size_sended, \
+      strlen(r->header) - r->header_size_sended, 0);
+    
+  }
+  r->fp = fopen(r->file_name,"r");
+  if (r->fp == NULL)
+  {
+    fprintf(stderr,"Nao foi possivel abrir arquivo");
+    return;
+  }
+  fseek(r->fp, r->sended_size, SEEK_SET);
+  nbytes = fread(bufin,1,BUFSIZE,r->fp);
+  nbytes = send(r->socket_id, bufin, nbytes, 0);
+  r->sended_size += nbytes;
+}  
 void close_std_file_desc()
 {
   close(STDIN_FILENO);

@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/time.h>
 #define ERROR -1
 #define SERVER_IP "127.0.0.1"
 #define BACKLOG 5
@@ -18,6 +19,7 @@
 int create_socket(const struct sockaddr_in *p);
 void config_connection(const char *port, struct sockaddr_in *serv_info);
 int make_connection(const char *port);
-void close_std_file_desc();
+write_to_client (struct request *r);
+iiiiiilose_std_file_desc();
 void open_background_process();
 #endif /* SERVER_LIB_H */
