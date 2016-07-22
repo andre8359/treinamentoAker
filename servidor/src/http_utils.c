@@ -26,8 +26,7 @@ char *get_resquest_info(char *request)
   if (file_name_length <= 0)
     return NULL;
   file_name = (char *) malloc (file_name_length * sizeof(char));
-  sscanf(request,"GET %s HTTP/1.%*[0-9] \r\n\r\n %*[^|]", file_name);
+  sscanf(request,"GET %s HTTP/1.%*[0-9]\r\n\r\n %*[^|]", file_name);
   return file_name;
 }
-
  
