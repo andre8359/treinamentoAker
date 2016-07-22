@@ -8,7 +8,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
-#define MAX_SIZE 100
+#define MAX_SIZE 200
 
 typedef struct {
 	int sk;
@@ -54,9 +54,9 @@ int main(int argc,char * argv[]) {
 	fprintf(stdout, "Servidor conectado.\n");
 	args.sk=sk;
 
-	pthread_create(&thread_0,NULL,(void*)&receber,(void*)&args);
+	//pthread_create(&thread_0,NULL,(void*)&receber,(void*)&args);
 	pthread_create(&thread_1,NULL,(void*)&enviar,(void*)&args);	
-	pthread_join(thread_0,NULL);			
+	//pthread_join(thread_0,NULL);			
 	pthread_join(thread_1,NULL);
 	printf("------- encerrando conexao com o servidor -----\n");
 
@@ -65,20 +65,22 @@ int main(int argc,char * argv[]) {
 } /* fim do programa */
 
 void *enviar(void *args){
-	char msg[MAX_SIZE];
+	char msg[MAX_SIZE], get_input[MAX_SIZE];
 	argumentos* dados = (argumentos*) args;
 	pthread_t thread_id;
 	while(1){
 		
 		memset(msg,0,sizeof(msg));
-		fscanf(stdin, "%s", msg);		
+		fgets(get_input, MAX_SIZE - 5, stdin);
+    get_input[strlen(get_input)-1] = '\0';
+    sprintf(msg,"%s\r\n\r\n",get_input);	
 		send(dados->sk, &msg,strlen(msg),0);
 		if(strncmp(msg,"quit.",5)==0)	break;
 		else{
 			pthread_create(&thread_id,NULL,(void*)&adiciona_data,NULL);
 			pthread_join(thread_id,NULL);
 			printf("Cliente -- ");
-			printf("%s\n",msg);
+			printf("%s",msg);
 		}	
 }	 
 	fprintf(stdout,"Encerrando conexao!!!\n\n");
