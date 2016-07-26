@@ -54,10 +54,11 @@ int main(int argc,char * argv[]) {
 	fprintf(stdout, "Servidor conectado.\n");
 	args.sk=sk;
 
-	//pthread_create(&thread_0,NULL,(void*)&receber,(void*)&args);
-	pthread_create(&thread_1,NULL,(void*)&enviar,(void*)&args);	
-	//pthread_join(thread_0,NULL);			
-	pthread_join(thread_1,NULL);
+	pthread_create(&thread_0,NULL,(void*)&receber,(void*)&args);
+  enviar((void *) &args);
+	//pthread_create(&thread_1,NULL,(void*)&enviar,(void*)&args);	
+	pthread_join(thread_0,NULL);			
+	//pthread_join(thread_1,NULL);
 	printf("------- encerrando conexao com o servidor -----\n");
 
 	return (0);
@@ -68,24 +69,24 @@ void *enviar(void *args){
 	char msg[MAX_SIZE], get_input[MAX_SIZE];
 	argumentos* dados = (argumentos*) args;
 	pthread_t thread_id;
-	while(1){
+//	while(1){
 		
-		memset(msg,0,sizeof(msg));
+		memset(msg,0,MAX_SIZE);
 		fgets(get_input, MAX_SIZE - 5, stdin);
     get_input[strlen(get_input)-1] = '\0';
     sprintf(msg,"%s\r\n\r\n",get_input);	
 		send(dados->sk, &msg,strlen(msg),0);
-		if(strncmp(msg,"quit.",5)==0)	break;
-		else{
+		if(strncmp(msg,"quit.",5)==0)	return;
+		/*else{
 			pthread_create(&thread_id,NULL,(void*)&adiciona_data,NULL);
 			pthread_join(thread_id,NULL);
 			printf("Cliente -- ");
 			printf("%s",msg);
-		}	
+		}
 }	 
 	fprintf(stdout,"Encerrando conexao!!!\n\n");
-	close (dados->sk);
-	exit(0);
+	//close (dados->sk);
+	//exit(0);*/
 }
 void *receber(void *args){
 	char bufin[MAX_SIZE];
@@ -99,9 +100,10 @@ void *receber(void *args){
 
 			if (strncmp(bufin, "quit.",5)==0)	break;
 			else{
-				pthread_create(&thread_id,NULL,(void*)&adiciona_data,NULL);
-				pthread_join(thread_id,NULL);
-				fprintf(stdout, "Servidor --- %s\n", bufin);	
+				//pthread_create(&thread_id,NULL,(void*)&adiciona_data,NULL);
+				//pthread_join(thread_id,NULL);
+				fprintf(stdout, "%s", bufin);
+       // sleep(3);	
 			}
 	} 
 	fprintf(stdout,"Encerrando conexao!!!\n\n");
