@@ -69,7 +69,7 @@ char *get_resquest_info(struct request_file *request)
     set_std_response(request);
     return NULL;
   }
-  if (strlen (temp) == 0)
+  if (strlen (temp) == 1 && (*temp == '/'))
     file_name = strdup("index.html");
   if (*temp == '/')
    file_name = strdup(temp + 1);
