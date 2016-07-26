@@ -91,69 +91,126 @@ void vector_cpy (char *dst, char *src, int begin, int length)
  * \param[in] socket_id Descritor do socket da conexao.
  * \return Ponteiro para a string da requisicao recebida.
  */
-char* receive_request_from_client(const int socket_id)
+
+int receive_request_from_client(const int socket_id,\
+  struct request_file **head)
 {
-  char bufin[BUFSIZE];
+  char bufin[BUFSIZE + 1];
   int nbytes = 0, received_size = 0;
-  char *request = NULL, *request_realloc = NULL;
-  request = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
-  memset(request, 0, BUFSIZE + 1); 
-  memset(bufin, 0, BUFSIZE);
-  while(((nbytes = recv(socket_id, bufin, BUFSIZE, 0)) > 0) \
-    && received_size < MAX_HEADER_SIZE)
+  
+  struct request_file *request = NULL;
+  request = search_request(socket_id, head);
+ 
+  if (request == NULL)
+    request = add_request(socket_id, head);
+  nbytes = recv(socket_id, bufin, BUFSIZE, 0);
+  
+  if (request->request != NULL)
+      received_size = strlen(request->request);
+  else
+      received_size = 0;
+  request->request = realloc(request->request, received_size + nbytes + 1);
+  vector_cpy(request->request, bufin, received_size, nbytes - 1);
+  request->request[received_size + nbytes ] = '\0';
+  if (!find_end_request(request->request))
   {
-    vector_cpy(request, bufin, received_size, nbytes - 1);
-    received_size += nbytes;
-    if (!find_end_request(request))
-      break;
-    else
-      request_realloc = (char *) realloc(request, received_size + BUFSIZE + 1);
-    if (request_realloc == NULL)
-      goto on_error_receive_request;
-    else
-      request = request_realloc; 
+    request->file_name = get_resquest_info(request);
+
+    if (request->file_name == NULL || check_file_ready_to_send(request) < 0)
+      set_std_response(request);
+    return 0;
   }
-  if (received_size >= MAX_HEADER_SIZE)
-    goto on_error_receive_request;
-  return request;
-on_error_receive_request:
-  free(request);
-  return NULL;
+  else
+    return -1;   
 } 
 /*!
  * \brief Envia informacoes pro cliente conectado.
  * \param[in] r Estrutura que representa a requisicao.
  */
-void write_to_client (struct request_file *r)
+int write_to_client (const int socket_id, struct request_file **head)
 {
-  char bufin[BUFSIZE];
   int nbytes = 0;
-  if (r->header_size_sended < strlen(r->header))
+  struct request_file *request = NULL;
+  request =  search_request(socket_id, head);
+  if (request->header == NULL)
+    request->header = make_header(request->file_name,request->status_request, 
+      &(request->file_size));
+  if (request->header_size_sended < strlen(request->header))
   {
-    nbytes = send(r->socket_id, r->header + r->header_size_sended, \
-      strlen(r->header) - r->header_size_sended, 0);    
+    int send_size = strlen(request->header) - request->header_size_sended;
+    if (send_size > BUFSIZE)
+      send_size = BUFSIZE;
+    
+    nbytes = send(socket_id, request->header + request->header_size_sended, 
+      send_size,0);  
+    request->header_size_sended += nbytes;
+    
+    return -1;
   }
-  r->fp = fopen(r->file_name,"r");
-  if (r->fp == NULL)
+  if (request->sended_size < request->file_size)
   {
-    fprintf(stderr,"Nao foi possivel abrir arquivo");
-    return;
+    char bufin[BUFSIZE];
+    request->fp = fopen(request->file_name,"r");
+    if (request->fp == NULL)
+      return -1;
+    fseek(request->fp, request->sended_size, SEEK_SET);
+    memset(bufin, 0, BUFSIZE);
+    nbytes = fread(bufin, 1, BUFSIZE,request->fp);
+    send(socket_id, bufin, nbytes, 0);
+    request->sended_size += nbytes;
+    fclose(request->fp);
+    return -1;
   }
-  fseek(r->fp, r->sended_size, SEEK_SET);
-  nbytes = fread(bufin,1,BUFSIZE,r->fp);
-  nbytes = send(r->socket_id, bufin, nbytes, 0);
-  r->sended_size += nbytes;
-}  
+  else
+    return 0;
+} 
+/*!
+ * \brief Change the current working directory 
+ */
+int change_root_directory(const char *root_diretory)
+{
+  if ((chdir(root_diretory)) < 0) 
+  {
+    fprintf(stderr,"Nao foi possivel mudar diretorio root!");
+    return -1;
+  }
+  if (create_default_response_files() < 0)
+    return -1;
+  return 0;
+}
 /*!
  * \brief Checa se o arquivo existe e pode ser enviado.
  * \param[in] file_name Nome do arquivo.
  * \return 0 para sucesso e <0 para falha.
  */
-int check_file_ready_to_send(char *file_name)
+int check_file_ready_to_send(struct request_file * request)
 {
-  char *root_diretory;   
-  if (getwd(root_diretory));
-  if (access(file_name,F_OK) != -1);
+  if (request->file_name == NULL)
+    return -1;
+  
+  if (access(request->file_name, F_OK) != -1) 
+  {
+    char root_diretory[PATH_MAX];
+    getcwd(root_diretory,PATH_MAX);
+    char abs_path[PATH_MAX];
+    realpath(request->file_name, abs_path);
+    if (strstr(abs_path, root_diretory) == NULL)
+    {
+      request->status_request = FORBIDDEN;
+      return -1;
+    }
+    if (access(request->file_name, R_OK) < 0)
+    { 
+      request->status_request = UNAUTHORIZED;
+      return -1;
+    }
+  }
+  else
+  {
+    request->status_request = NOT_FOUND;
+    return -1;
+  }
+  return 0; 
 }
 /*!
  * \brief Fecha os arquivos abertos pelo padrão (STDIN, STDOUT, STDERR).

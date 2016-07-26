@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include "request_lib.h"
 #define OK 0
 #define BAD_REQUEST 1
 #define UNAUTHORIZED 2
@@ -15,7 +16,9 @@
 #define SERVICE_UNAVAILABLE 7
 #define MAX_HEADER_SIZE 4000
 int find_end_request(char *header);
-char *get_resquest_info(char *request);
+char *get_resquest_info(struct request_file *request);
 char *make_header(const char *file_name, const int status, 
   unsigned long *file_size);
+int create_default_response_files();
+int set_std_response(struct request_file *r);
 #endif /* SERVER_LIB_H */
