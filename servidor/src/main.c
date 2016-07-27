@@ -32,6 +32,7 @@ int main()
     goto on_error;
   signal(SIGINT,clean_up); 
   FD_ZERO (&active_fd_set);
+  FD_ZERO(&read_fd_set);
   FD_ZERO (&write_fd_set);
   FD_SET (socket_id, &active_fd_set);
 
@@ -50,27 +51,27 @@ int main()
         if (i == socket_id)
         {
           new_socket_id = accept_new_connection(socket_id);
-          FD_SET (new_socket_id, &active_fd_set);
+          FD_SET (new_socket_id, &read_fd_set);
         }
         else
         {
            if (receive_request_from_client(i, &head) == 0)
            {
              FD_SET(i, &write_fd_set);
-             FD_CLR(i, &active_fd_set);
+             FD_CLR(i, &read_fd_set);
            } 
         }
       }
       else if (FD_ISSET(i, &write_fd_set))
       {
-        if (write_to_client(i, &head) < 0)
-          fprintf(stderr,"."); 
-        else
+        if (write_to_client(i, &head) == 0)
+          //fprintf(stderr,"."); 
+       // else
         {
+          //struct request_file *r = search_request(i, &head);
+          //fprintf(stderr,"\nEnvio arquivo finalizado --> %s!\n",r->file_name );
           rm_request(i, &head);
-          fprintf(stderr,"Envio arquivo finalizado!\n");
           FD_CLR(i, &write_fd_set);
-          close(i);
         }
       }
     }
