@@ -17,7 +17,6 @@ void clean_up()
     close(socket_id);
   exit(EXIT_FAILURE);
 }
-
 int main()
 {
   const char port[] = "8080";
@@ -65,13 +64,11 @@ int main()
       else if (FD_ISSET(i, &write_fd_set))
       {
         if (write_to_client(i, &head) < 0)
-        {
-          fprintf(stderr,"Enviando Header ...\n"); 
-        }
+          fprintf(stderr,"."); 
         else
         {
           rm_request(i, &head);
-          fprintf(stderr,"Envio header finalizado!\n");
+          fprintf(stderr,"Envio arquivo finalizado!\n");
           FD_CLR(i, &write_fd_set);
           close(i);
         }

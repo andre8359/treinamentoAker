@@ -22,7 +22,7 @@ const char *messages_status [] =
     "<html>\n"
     " <body>\n"
     "  <h1>404 - Not Found</h1>\n"
-    "  <p>A URL requisitado nao pode ser encontrada nesse servidor.</p>\n"
+    "  <p>A URL requisitada nao pode ser encontrada nesse servidor.</p>\n"
     " </body>\n"
     "</html>\n",
     "<h1> 413 - Request Entity Too Large</h1>",
@@ -53,8 +53,9 @@ int find_end_request(char *request)
 
 char *get_resquest_info(struct request_file *request)
 {
-  char *file_name = NULL, temp[PATH_MAX];
-  char command[5], http_version[10]; 
+  char *file_name = NULL, temp[PATH_MAX]; 
+  const int command_len = 5, http_version_len = 10;
+  char command[command_len], http_version[http_version_len]; 
  
    sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, temp,
       http_version);
@@ -64,6 +65,10 @@ char *get_resquest_info(struct request_file *request)
   else if ((strncmp(http_version,"HTTP/1.0",8)) 
     && (strncmp(http_version,"HTTP/1.1",8)))
     request->status_request = BAD_REQUEST;
+  else if (strlen(temp) == 1 && *temp == '.')
+    request->status_request = BAD_REQUEST;
+  else if (strlen(temp) == 2 && !strncmp(temp,"..",2))
+    request->status_request = BAD_REQUEST;
   if (request->status_request == BAD_REQUEST)
   {
     set_std_response(request);
@@ -71,7 +76,7 @@ char *get_resquest_info(struct request_file *request)
   }
   if (strlen (temp) == 1 && (*temp == '/'))
     file_name = strdup("index.html");
-  if (*temp == '/')
+  else if (*temp == '/')
    file_name = strdup(temp + 1);
   else
   file_name = strdup(temp);
