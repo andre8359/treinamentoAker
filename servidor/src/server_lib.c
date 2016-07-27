@@ -132,6 +132,8 @@ int write_to_client (const int socket_id, struct request_file **head)
   int nbytes = 0;
   struct request_file *request = NULL;
   request =  search_request(socket_id, head);
+  if (request == NULL)
+    return -2;
   if (request->header == NULL)
     request->header = make_header(request->file_name,request->status_request, 
       &(request->file_size));
@@ -142,7 +144,9 @@ int write_to_client (const int socket_id, struct request_file **head)
       send_size = BUFSIZE;
     
     nbytes = send(socket_id, request->header + request->header_size_sended, 
-      send_size,0);  
+      send_size, MSG_NOSIGNAL);  
+    if (nbytes <= 0 )
+      return 0;
     request->header_size_sended += nbytes;
     
     return -1;
@@ -150,15 +154,20 @@ int write_to_client (const int socket_id, struct request_file **head)
   if (request->sended_size < request->file_size)
   {
     char bufin[BUFSIZE];
-    request->fp = fopen(request->file_name,"r");
-    if (request->fp == NULL)
-      return -1;
-    fseek(request->fp, request->sended_size, SEEK_SET);
+    if(request->fp == NULL)
+    {
+      request->fp = fopen(request->file_name,"r");
+      if (request->fp == NULL)
+        return -1;
+    }
+    //fseek(request->fp, request->sended_size, SEEK_SET);
     memset(bufin, 0, BUFSIZE);
     nbytes = fread(bufin, 1, BUFSIZE,request->fp);
-    send(socket_id, bufin, nbytes, 0);
+    nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
+    if (nbytes <= 0 ) 
+      return 0;
     request->sended_size += nbytes;
-    fclose(request->fp);
+    //fclose(request->fp);
     return -1;
   }
   else
