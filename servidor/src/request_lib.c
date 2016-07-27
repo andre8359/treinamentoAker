@@ -41,15 +41,22 @@ struct request_file* rm_request(const int socket_id, struct request_file **head)
         free((*head)->file_name);
         free((*head)->request);
         free((*head)->header);
+        if ((*head)->fp != NULL)
+          fclose((*head)->fp);
+        if ((*head)->socket_id)
+          close((*head)->socket_id);
         free(*head);
         *head = NULL;
         return NULL;
       }
       deleted_request = (*head)->next;
       deleted_request->prev = NULL;
+      if ((*head)->fp != NULL)
+        fclose((*head)->fp);
+      if ((*head)->socket_id)
+        close((*head)->socket_id);
       free(*head);
       *head = NULL;
-      
       return deleted_request;
     }
     else 
@@ -62,6 +69,13 @@ struct request_file* rm_request(const int socket_id, struct request_file **head)
       struct request_file *swap_request = deleted_request->next;
       swap_request->prev = deleted_request->prev;   
     } 
+    free(deleted_request->file_name);
+    free(deleted_request->header);
+    free(deleted_request->request);
+    if (deleted_request->fp != NULL)
+      fclose(deleted_request->fp);
+    if (deleted_request->socket_id)
+      close(deleted_request->socket_id);
     free(deleted_request);
     return NULL;
   }
@@ -93,6 +107,10 @@ void free_request_list(struct request_file **head)
     free(i->file_name);
     free(i->request);
     free(i->header);
+    if (i->fp != NULL)
+      fclose(i->fp);
+    if (i->socket_id)
+      close(i->socket_id);
     free(i);
     i = j;
   }
