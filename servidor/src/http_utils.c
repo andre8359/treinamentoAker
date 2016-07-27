@@ -185,12 +185,13 @@ char *make_header(const char *file_name, const int status,
   char *content_length = get_content_length(file_name, file_size);
   char *date = get_date();
   char *content_type = get_content_type(file_name);
+  char connection_status[] = "Connection: Close\r\n"; 
   int header_size = strlen(status_conection[status]) + strlen(content_type)+1 \
     + strlen(content_length)+1  + strlen(date)+1 + strlen(server)+1 \
-    + end_header_len;
+    + end_header_len + strlen(connection_status);
  char *header = (char *) malloc (header_size * sizeof(char));
- snprintf(header, header_size, "%s%s%s%s%s\r\n", status_conection[status],
-  content_type, content_length, date,server);
+ snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status],
+  content_type, content_length,connection_status,date,server);
   free(content_length);
   free(date);
   free(content_type);
