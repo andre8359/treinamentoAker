@@ -1,7 +1,7 @@
 /*!
  * \file   server_lib.c
  * \brief  Arquivo de implementação das funcoes para o recupe
- * \date 11/07/2016
+ * \date 18/07/2016
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include "server_lib.h"
@@ -22,20 +22,19 @@ int create_socket(const struct sockaddr_in *p)
 /*!
  * \brief Seta as informacoes necessarias para criar um socket.
  */
-void config_connection(const char *port, struct sockaddr_in *serv_info)
+void config_connection(const long port, struct sockaddr_in *serv_info)
 { 
   serv_info->sin_family = AF_INET;           
 	serv_info->sin_addr.s_addr = INADDR_ANY; 	
-	serv_info->sin_port = htons(atoi(port)); 
+	serv_info->sin_port = htons(port); 
 }
 /*!
- * \brief Aguarda e aceita conexao.
- * \param[in]  p Estrutura que contem as informacoes necessarias para abertura 
- *  do socket.
+ * \brief Cria socket e faz o bind com a porta especificada.
+ * \param[in]  port  Inteiro que indica em qual porta a conexao acontecera. 
  * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de 
  *  falha.
  */
-int make_connection(const char *port)
+int make_connection(const long port)
 {
   struct sockaddr_in serv_info;
   int socket_id = 0;
@@ -65,11 +64,8 @@ int accept_new_connection(const int socket_id)
   new_socket_id = accept (socket_id,(struct sockaddr *) &client_info, \
     &client_len);                                                       
   if (new_socket_id < 0)                                                
-  {                                                                     
-    fprintf (stderr,"accept");                                          
-    exit (EXIT_FAILURE);                                                
-  }                                                                     
-  fprintf (stderr, "Servidor: conectado em host %s, porta %hd.\n",      
+    return ERROR;                                                     
+  fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",      
   inet_ntoa (client_info.sin_addr), ntohs (client_info.sin_port));
   return new_socket_id;
 }
@@ -80,7 +76,7 @@ int accept_new_connection(const int socket_id)
  * \param[in] begin  Indica a posicao inicial do vertor dst.
  * \param[in] length Indica quantos elementos serao copiados
  */
-void vector_cpy (char *dst, char *src, int begin, int length)
+void vector_cpy (char *dst, const char *src, const int begin, const int length)
 {
   int i, j = begin;
   for (i = 0; i <= length; i++)
@@ -89,22 +85,19 @@ void vector_cpy (char *dst, char *src, int begin, int length)
 /*!
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
- * \return Ponteiro para a string da requisicao recebida.
+ * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
+ * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-
-int receive_request_from_client(const int socket_id,\
+int receive_request_from_client(const int socket_id, 
   struct request_file **head)
 {
   char bufin[BUFSIZE + 1];
-  int nbytes = 0, received_size = 0;
-  
+  int nbytes = 0, received_size = 0; 
   struct request_file *request = NULL;
   request = search_request(socket_id, head);
- 
   if (request == NULL)
     request = add_request(socket_id, head);
   nbytes = recv(socket_id, bufin, BUFSIZE, 0);
-  
   if (request->request != NULL)
       received_size = strlen(request->request);
   else
@@ -115,17 +108,18 @@ int receive_request_from_client(const int socket_id,\
   if (!find_end_request(request->request))
   {
     request->file_name = get_resquest_info(request);
-
     if (request->file_name == NULL || check_file_ready_to_send(request) < 0)
       set_std_response(request);
-    return 0;
+    return SUCCESS;
   }
   else
-    return -1;   
+    return ERROR;   
 } 
 /*!
  * \brief Envia informacoes pro cliente conectado.
- * \param[in] r Estrutura que representa a requisicao.
+ * \param[in] socket_id Descritor do socket da conexao.
+ * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
+ * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
 int write_to_client (const int socket_id, struct request_file **head)
 {
@@ -133,7 +127,7 @@ int write_to_client (const int socket_id, struct request_file **head)
   struct request_file *request = NULL;
   request =  search_request(socket_id, head);
   if (request == NULL)
-    return -2;
+    return ERROR;
   if (request->header == NULL)
     request->header = make_header(request->file_name,request->status_request, 
       &(request->file_size));
@@ -141,15 +135,13 @@ int write_to_client (const int socket_id, struct request_file **head)
   {
     int send_size = strlen(request->header) - request->header_size_sended;
     if (send_size > BUFSIZE)
-      send_size = BUFSIZE;
-    
+      send_size = BUFSIZE; 
     nbytes = send(socket_id, request->header + request->header_size_sended, 
       send_size, MSG_NOSIGNAL);  
     if (nbytes <= 0 )
-      return 0;
+      return SUCCESS;
     request->header_size_sended += nbytes;
-    
-    return -1;
+    return ERROR;
   }
   if (request->sended_size < request->file_size)
   {
@@ -158,44 +150,44 @@ int write_to_client (const int socket_id, struct request_file **head)
     {
       request->fp = fopen(request->file_name,"r");
       if (request->fp == NULL)
-        return -1;
+        return ERROR;
     }
-    //fseek(request->fp, request->sended_size, SEEK_SET);
     memset(bufin, 0, BUFSIZE);
     nbytes = fread(bufin, 1, BUFSIZE,request->fp);
     nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
     if (nbytes <= 0 ) 
-      return 0;
+      return SUCCESS;
     request->sended_size += nbytes;
-    //fclose(request->fp);
-    return -1;
+    return ERROR;
   }
   else
-    return 0;
+    return SUCCESS;
 } 
 /*!
- * \brief Change the current working directory 
- */
-int change_root_directory(const char *root_diretory)
+ * \brief Change the current working directory
+ * \param[in] root_diretory Diretorio que sera considera a raiz do servidor.
+ * \return Retorna 0 caso tenha mudado com sucesso ou -1 caso nao.
+*/
+int change_root_directory(const char *root_directory)
 {
-  if ((chdir(root_diretory)) < 0) 
+  if ((chdir(root_directory)) < 0) 
   {
     fprintf(stderr,"Nao foi possivel mudar diretorio root!");
-    return -1;
+    return ERROR;
   }
   if (create_default_response_files() < 0)
-    return -1;
-  return 0;
+    return ERROR;
+  return SUCCESS;
 }
 /*!
  * \brief Checa se o arquivo existe e pode ser enviado.
- * \param[in] file_name Nome do arquivo.
+ * \param[in] request Estrutura com as informacoes do arquivo requisitado.
  * \return 0 para sucesso e <0 para falha.
  */
 int check_file_ready_to_send(struct request_file * request)
 {
   if (request->file_name == NULL)
-    return -1;
+    return ERROR;
   
   if (access(request->file_name, F_OK) != -1) 
   {
@@ -206,23 +198,23 @@ int check_file_ready_to_send(struct request_file * request)
     if (strstr(abs_path, root_diretory) == NULL)
     {
       request->status_request = FORBIDDEN;
-      return -1;
+      return ERROR;
     }
     if (access(request->file_name, R_OK) < 0)
     { 
       request->status_request = UNAUTHORIZED;
-      return -1;
+      return ERROR;
     }
   }
   else
   {
     request->status_request = NOT_FOUND;
-    return -1;
+    return ERROR;
   }
-  return 0; 
+  return SUCCESS; 
 }
 /*!
- * \brief Fecha os arquivos abertos pelo padrão (STDIN, STDOUT, STDERR).
+ * \brief Fecha os arquivos abertos pelo SO (STDIN, STDOUT, STDERR).
  */
 void close_std_file_desc()
 {
@@ -243,9 +235,12 @@ void open_background_process()
     exit(EXIT_SUCCESS);
 }
 /*!
- * \brief Cria processo pra rodar o Daemon.
+ * \brief Retorna o maior entre dois inteiros.
+ * \param[in] a Valor para comparacao.
+ * \param[in] b Valor para comparacao.
+ * \return O maior valor entre os dois.
  */
-int max(int a , int b)
+int max(const int a , const int b)
 {
   if (a > b)
     return a;
@@ -253,12 +248,95 @@ int max(int a , int b)
     return b;
 }
 /*!
- * \brief Cria processo pra rodar o Daemon.
+ * \brief Retorna o menor entre dois inteiros.
+ * \param[in] a Valor para comparacao.
+ * \param[in] b Valor para comparacao.
+ * \return O menor valor entre os dois.
  */
-int min(int a , int b)
+int min(const int a , const int b)
 {
   if (a < b)
     return a;
   else 
     return b;
+}
+/*!
+ * \brief Realiza a coleta dos parametros de entrada.
+ * \param[in]  argc Numero de parametros passados na linha de comando.
+ * \param[in]  argv Lista de parametros passados na linha de comando.
+ * \param[out] port String com informacao sobre a porta da conexao.
+ * \param[out] root_directory Diretorio que sera considerado a raiz do servidor.
+ * \return  0 em caso de parametros validos -1 caso parametros.
+ */
+static int get_param(int argc, char *argv[], char **port, char **root_directory)
+{
+  int c;
+  opterr = 0;
+  if (argc < 5)
+    goto on_error;
+  while ((c = getopt(argc, argv, "p:d:")) != -1)
+  {
+    switch (c)
+    {
+    case 'p':
+      *port = optarg;
+      break;
+    case 'd':
+      *root_directory = optarg;
+      break;
+    case '?':
+      if (optopt == 'p')
+        goto on_error;
+      else if (optopt == 'd')
+        goto on_error;
+      else if (isprint(optopt))
+      {
+        printf("Opcao desconhecida '-%c'.", optopt);
+        goto on_error;
+      }
+      break;
+    default:
+      goto on_error;
+    }
+   }
+   return 0;
+on_error:
+  return ERROR;
+}
+/*!
+ * \brief Realiza a validacao dos parametros de entrada.
+ * \param[in]  argc Numero de parametros passados na linha de comando.
+ * \param[in]  argv Lista de parametros passados na linha de comando. 
+ * \return  0 em caso de parametros validos -1 caso parametros.
+ */
+long params_is_valid(int argc , char *argv[])
+{
+  char *port, *root_diretory, *end_port;
+  long port_int = 0;
+  const int base = 10, port_range_max = 65535;
+  int ret = get_param(argc, argv, &port, &root_diretory);
+  if ( ret < 0)
+    goto on_error;
+  if (port == NULL || root_diretory == NULL)
+    goto on_error;
+
+  errno = 0;
+  port_int = strtol(port, &end_port, base);
+  if ((errno == ERANGE && (port_int == LONG_MAX || port_int == LONG_MIN))
+     || (port_int <= 0 || port_int > port_range_max))
+    goto on_error; 
+  if (change_root_directory(root_diretory) < 0)
+  {
+    fprintf(stderr, "Nao foi possivel definir esse diretorio como raiz!\n");
+    return ERROR;
+  }
+  return port_int;
+on_error:
+  fprintf(stderr, "%s%s%s%s%s",
+    "Linha de comando incompleta :\n",
+    "\t\t ./prog -p <PORTA> -d <DIRETORIO RAIZ>\n\n", 
+    "Lembre que caso o valor da porta seja menor que 1023 ",
+    " o programa necessitara de permissoes de super usuario.",
+    " Range de portas 1-65535.\n");
+  return ERROR;
 }

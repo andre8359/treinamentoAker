@@ -17,13 +17,13 @@ void clean_up()
     close(socket_id);
   exit(EXIT_FAILURE);
 }
-int main()
+int main(int argc,  char *argv[])
 {
-  const char port[] = "8080";
-  const char root_diretory[] = "root/";
+  long port = 0;
   int new_socket_id = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
-  if (change_root_directory(root_diretory) < 0)
+  port = params_is_valid(argc, argv);
+  if (port <= 0)
     clean_up();
   socket_id = make_connection(port);
   if (socket_id < 0)
@@ -69,7 +69,6 @@ int main()
              break;
            else if (receive_request_from_client(i, &head) == 0)
            {
-            // print_request_list(&head);
              FD_SET(i, &active_write_fd_set);
              FD_CLR(i, &active_read_fd_set);
            } 
@@ -78,11 +77,7 @@ int main()
       else if (FD_ISSET(i, &write_fd_set))
       {
         if (write_to_client(i, &head) == 0)
-          //fprintf(stderr,"."); 
-        //else
         {
-          //struct request_file *r = search_request(i, &head);
-          //fprintf(stderr,"\nEnvio arquivo finalizado --> %s!\n",r->file_name );
           rm_request(i, &head);
           FD_CLR(i, &active_write_fd_set);
         }

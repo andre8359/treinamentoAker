@@ -21,8 +21,8 @@ struct request_file
 struct request_file* add_request(const int socket_id, 
   struct request_file **head);
 struct request_file *rm_request(const int socket_id, struct request_file **head);
-struct request_file *search_request(const int socket_id, struct request_file
-**head);
+struct request_file *search_request(const int socket_id, 
+  struct request_file **head);
 void free_request_list(struct request_file **head);
 void print_request_list(struct request_file **head);
 #endif /* REQUEST_LIB_H */

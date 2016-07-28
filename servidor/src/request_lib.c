@@ -1,4 +1,19 @@
+/*!
+ * \file   request_lib.c
+ * \brief  Arquivo de implementação das funcoes para o manipulacao da lista de 
+ * requisicoes.
+ * \date 18/07/2016
+ * \author Andre Dantas <andre.dantas@aker.com.br>
+ */
 #include "request_lib.h"
+/*!
+ * \brief Realiza a adicao de uma requisicao na lista.
+ * \param[in]  socket_id  Descritor do socket da conexao que originou a
+ *  requisicao.
+ * \param[in]  head  Ponteiro para o primeiro elemento da lista. 
+ * \return  NULL em caso de erro ou um ponteiro para nova requisicao em caso de
+ *  sucesso. 
+ */
 struct request_file* add_request(const int socket_id,
   struct request_file **head)
 {
@@ -24,6 +39,12 @@ struct request_file* add_request(const int socket_id,
     return new_request; 
   }  
 }
+/*!
+ * \brief Realiza a liberacao da memoria alocada para um elemento da lista.
+ * \param[in]  r Ponteiro para o elemento que sera desalocado.
+ * \return  NULL em caso de sucesso ou um ponteiro para nova requisicao em caso de
+ *  falha. 
+ */
 static struct request_file* free_request_file(struct request_file **r)
 {
   free((*r)->file_name);
@@ -37,6 +58,14 @@ static struct request_file* free_request_file(struct request_file **r)
   (*r) = NULL;
   return (*r);
 }
+/*!
+ * \brief Realiza a remocao de uma requisicao na lista.
+ * \param[in]  socket_id  Descritor do socket da conexao que originou a
+ *  requisicao.
+ * \param[in]  head  Ponteiro para o primeiro elemento da lista. 
+ * \return  NULL em caso de erro ou um ponteiro para deletada requisicao em caso de
+ *  sucesso. 
+ */
 struct request_file* rm_request(const int socket_id, struct request_file **head)
 {
   if (*head == NULL)
@@ -72,6 +101,14 @@ struct request_file* rm_request(const int socket_id, struct request_file **head)
     }
   }
 }
+/*!
+ * \brief Realiza busca por uma requisicao baseado no descritor que originou-a.
+ * \param[in]  socket_id  Descritor do socket da conexao que originou a
+ *  requisicao.
+ * \param[in]  head  Ponteiro para o primeiro elemento da lista. 
+ * \return  NULL em caso de erro ou um ponteiro para requisicao em caso de
+ *  sucesso. 
+ */
 struct request_file* search_request(const int socket_id,
   struct request_file **head)
 {
@@ -89,6 +126,10 @@ struct request_file* search_request(const int socket_id,
       return temp; 
   }
 }
+/*!
+ * \brief Realiza a liberacao de uma lista de requisicoes.
+ * \param[in]  head  Ponteiro para o primeiro elemento da lista. 
+ */
 void free_request_list(struct request_file **head)
 {
   struct request_file *i, *j = NULL;
@@ -100,6 +141,10 @@ void free_request_list(struct request_file **head)
     i = j;
   }
 }
+/*!
+ * \brief Realiza a print dos descritores de uma lista de requisicoes.
+ * \param[in]  head  Ponteiro para o primeiro elemento da lista. 
+ */
 void print_request_list(struct request_file **head)
 {
   if (*head == NULL)
