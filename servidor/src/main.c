@@ -17,12 +17,14 @@ void clean_up()
     close(socket_id);
   exit(EXIT_FAILURE);
 }
+
 int main(int argc,  char *argv[])
 {
   long port = 0;
   int new_socket_id = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
+  long speed_limit = 0;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
-  port = params_is_valid(argc, argv);
+  port = params_is_valid(argc, argv, &speed_limit);
   if (port <= 0)
     clean_up();
   socket_id = make_connection(port);
@@ -67,7 +69,7 @@ int main(int argc,  char *argv[])
         {
            if (i == socket_id)
              break;
-           else if (receive_request_from_client(i, &head) == 0)
+           else if (receive_request_from_client(i, &head, speed_limit) == 0)
            {
              FD_SET(i, &active_write_fd_set);
              FD_CLR(i, &active_read_fd_set);
@@ -76,7 +78,7 @@ int main(int argc,  char *argv[])
       }
       else if (FD_ISSET(i, &write_fd_set))
       {
-        if (write_to_client(i, &head) == 0)
+        if (write_to_client(i, &head, speed_limit) == 0)
         {
           rm_request(i, &head);
           FD_CLR(i, &active_write_fd_set);

@@ -89,7 +89,7 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
 int receive_request_from_client(const int socket_id, 
-  struct request_file **head)
+  struct request_file **head, long buf_size)
 {
   char *bufin = NULL;
   int nbytes = 0, received_size = 0; 
@@ -98,13 +98,13 @@ int receive_request_from_client(const int socket_id,
   request = search_request(socket_id, head);
   if (request == NULL)
     request = add_request(socket_id, head);
-  bufin = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
+  bufin = (char *) malloc ((buf_size + 1) * sizeof(char));
   if (bufin == NULL)
     goto on_error;   
-  memset(bufin, 0, BUFSIZE + 1);
+  memset(bufin, 0, buf_size + 1);
   if (!calc_if_seg_had_pass(request))
   {
-    nbytes = recv(socket_id, bufin, BUFSIZE, 0);
+    nbytes = recv(socket_id, bufin, buf_size, 0);
     request->last_pack = clock();
   } 
   else 
@@ -135,7 +135,8 @@ on_error:
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int write_to_client (const int socket_id, struct request_file **head)
+int write_to_client (const int socket_id, struct request_file **head, 
+  long buf_size)
 {
   int nbytes = 0;
   struct request_file *request = NULL;
@@ -153,8 +154,8 @@ int write_to_client (const int socket_id, struct request_file **head)
     if (!calc_if_seg_had_pass(request))
     {
       int send_size = strlen(request->header) - request->header_size_sended;
-      if (send_size > BUFSIZE)
-        send_size = BUFSIZE;
+      if (send_size > buf_size)
+        send_size = buf_size;
       nbytes = send(socket_id, request->header + request->header_size_sended, 
         send_size, MSG_NOSIGNAL);  
         request->last_pack = clock();
@@ -170,21 +171,24 @@ int write_to_client (const int socket_id, struct request_file **head)
   {
     if (!calc_if_seg_had_pass(request))
     {
-      bufin = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
+      bufin = (char *) malloc ((buf_size + 1) * sizeof(char));
       if (bufin == NULL)
         goto on_error;   
-      memset(bufin, 0, BUFSIZE);
+      memset(bufin, 0, buf_size);
       if(request->fp == NULL)
       {
         request->fp = fopen(request->file_name,"r");
         if (request->fp == NULL)
           goto on_error;
       }
-            nbytes = fread(bufin, 1, BUFSIZE,request->fp);
+            nbytes = fread(bufin, 1, buf_size,request->fp);
       nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
       request->last_pack = clock();
       if (bufin != NULL)
+      {
         free(bufin);
+        bufin = NULL;
+      }
       if (nbytes <= 0 ) 
         return SUCCESS;
       request->sended_size += nbytes;
@@ -305,13 +309,14 @@ int min(const int a , const int b)
  * \param[out] root_directory Diretorio que sera considerado a raiz do servidor.
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
-static int get_param(int argc, char *argv[], char **port, char **root_directory)
+static int get_param(int argc, char *argv[], char **port, char **root_directory,
+  char **speed_limit)
 {
   int c;
   opterr = 0;
-  if (argc < 5)
+  if (argc < 7)
     goto on_error;
-  while ((c = getopt(argc, argv, "p:d:")) != -1)
+  while ((c = getopt(argc, argv, "p:d:l:")) != -1)
   {
     switch (c)
     {
@@ -321,10 +326,14 @@ static int get_param(int argc, char *argv[], char **port, char **root_directory)
     case 'd':
       *root_directory = optarg;
       break;
+    case 'l':
+      *speed_limit = optarg;
     case '?':
       if (optopt == 'p')
         goto on_error;
       else if (optopt == 'd')
+        goto on_error;
+      else if (optopt == 'l')
         goto on_error;
       else if (isprint(optopt))
       {
@@ -346,22 +355,28 @@ on_error:
  * \param[in]  argv Lista de parametros passados na linha de comando. 
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
-long params_is_valid(int argc , char *argv[])
+long params_is_valid(int argc , char *argv[], long *speed_limit)
 {
-  char *port, *root_diretory, *end_port;
+  char *port, *root_diretory, *end, *sd_limit;
   long port_int = 0;
   const int base = 10, port_range_max = 65535;
-  int ret = get_param(argc, argv, &port, &root_diretory);
+  int ret = get_param(argc, argv, &port, &root_diretory, &sd_limit);
   if ( ret < 0)
     goto on_error;
   if (port == NULL || root_diretory == NULL)
     goto on_error;
 
   errno = 0;
-  port_int = strtol(port, &end_port, base);
+  port_int = strtol(port, &end, base);
   if ((errno == ERANGE && (port_int == LONG_MAX || port_int == LONG_MIN))
      || (port_int <= 0 || port_int > port_range_max))
-    goto on_error; 
+    goto on_error;
+  errno = 0; 
+  *speed_limit = strtol(sd_limit, &end, base);
+   if ((errno == ERANGE && (*speed_limit == LONG_MAX ||*speed_limit == LONG_MIN))
+     || (*speed_limit <= 0))
+    goto on_error;
+
   if (change_root_directory(root_diretory) < 0)
   {
     fprintf(stderr, "Nao foi possivel definir esse diretorio como raiz!\n");
@@ -371,10 +386,10 @@ long params_is_valid(int argc , char *argv[])
 on_error:
   fprintf(stderr, "%s%s%s%s%s",
     "Linha de comando incompleta :\n",
-    "\t\t ./prog -p <PORTA> -d <DIRETORIO RAIZ>\n\n", 
+    "\t\t ./prog -p <PORTA> -d <DIRETORIO RAIZ> -l <limite de velocidade>\n\n", 
     "Lembre que caso o valor da porta seja menor que 1023 ",
     " o programa necessitara de permissoes de super usuario.",
-    " Range de portas 1-65535.\n");
+    " Range de portas 1-65535.\n O limite de velocidade deve ser em bytes/s\n\n");
   return ERROR;
 }
 /*!
