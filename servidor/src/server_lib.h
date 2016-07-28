@@ -20,7 +20,10 @@
 #define SUCCESS 0
 #define SERVER_IP "127.0.0.1"
 #define BACKLOG 5
-#define BUFSIZE 8192
+#define KILOBYTE 1024
+#define MEGABYTE 1024 * KILOBYTE
+#define GIGABYTE 1024 * MEGABYTE
+#define BUFSIZE  1
 int create_socket(const struct sockaddr_in *p);
 void config_connection(const long port, struct sockaddr_in *serv_info);
 int make_connection(const long port);
@@ -37,4 +40,5 @@ void clean_up();
 int max(const int a, const int b);
 int min(int a , int b);
 long params_is_valid(int argc, char *argv[]);
+int calc_if_seg_had_pass(struct request_file *r);
 #endif /* SERVER_LIB_H */

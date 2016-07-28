@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <time.h>
 #define PATH_MAX 4096
 struct request_file
 {
@@ -16,6 +17,7 @@ struct request_file
   unsigned long header_size_sended;
   unsigned long file_size, sended_size;
   int socket_id, status_request;
+  clock_t last_pack;
   struct request_file *prev, *next;
 };
 struct request_file* add_request(const int socket_id, 

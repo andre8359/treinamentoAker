@@ -1,0 +1,73 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+BACKLOG	server_lib.h	19;"	d
+BAD_REQUEST	http_utils.h	10;"	d
+BUFSIZE	server_lib.h	20;"	d
+ERROR	server_lib.h	17;"	d
+FORBIDDEN	http_utils.h	12;"	d
+HTTP_UTILS_H	http_utils.h	2;"	d
+INTERNAL_ERROR	http_utils.h	15;"	d
+MAX_HEADER_SIZE	http_utils.h	17;"	d
+MAX_SIZE	cliente.c	11;"	d	file:
+NOT_FOUND	http_utils.h	13;"	d
+OK	http_utils.h	9;"	d
+PATH_MAX	server_lib.h	21;"	d
+REQUEST_LIB_H	request_lib.h	2;"	d
+REQUEST_TOO_LARGE	http_utils.h	14;"	d
+SERVER_IP	server_lib.h	18;"	d
+SERVER_LIB_H	server_lib.h	2;"	d
+SERVICE_UNAVAILABLE	http_utils.h	16;"	d
+UNAUTHORIZED	http_utils.h	11;"	d
+accept_new_connection	server_lib.c	/^int accept_new_connection(const int socket_id)$/;"	f
+add_request	request_lib.c	/^struct request_file* add_request(const int socket_id,$/;"	f
+adiciona_data	cliente.c	/^void* adiciona_data(void)  {$/;"	f
+argumentos	cliente.c	/^}argumentos;$/;"	t	typeref:struct:__anon1	file:
+change_root_directory	server_lib.c	/^int change_root_directory(const char *root_diretory)$/;"	f
+check_file_ready_to_send	server_lib.c	/^int check_file_ready_to_send(struct request_file * request)$/;"	f
+clean_up	main.c	/^void clean_up()$/;"	f
+close_std_file_desc	server_lib.c	/^void close_std_file_desc()$/;"	f
+config_connection	server_lib.c	/^void config_connection(const char *port, struct sockaddr_in *serv_info)$/;"	f
+create_default_response_files	http_utils.c	/^int create_default_response_files()$/;"	f
+create_socket	server_lib.c	/^int create_socket(const struct sockaddr_in *p)$/;"	f
+enviar	cliente.c	/^void *enviar(void *args){$/;"	f
+file_name	request_lib.h	/^  char *file_name;$/;"	m	struct:request_file
+file_size	request_lib.h	/^  unsigned long file_size, sended_size;$/;"	m	struct:request_file
+find_end_request	http_utils.c	/^int find_end_request(char *request)$/;"	f
+fp	request_lib.h	/^  FILE *fp;$/;"	m	struct:request_file
+free_request_list	request_lib.c	/^void free_request_list(struct request_file **head)$/;"	f
+get_content_length	http_utils.c	/^static char *get_content_length(const char *file_name, unsigned long *file_size)$/;"	f	file:
+get_date	http_utils.c	/^static char *get_date()$/;"	f	file:
+get_file_name_length	http_utils.c	/^static int get_file_name_length(char *request)$/;"	f	file:
+get_resquest_info	http_utils.c	/^char *get_resquest_info(char *request)$/;"	f
+head	main.c	/^struct request_file *head = NULL;$/;"	v	typeref:struct:request_file
+header	request_lib.h	/^  char *header;$/;"	m	struct:request_file
+header_size_sended	request_lib.h	/^  unsigned long header_size_sended;$/;"	m	struct:request_file
+main	cliente.c	/^int main(int argc,char * argv[]) {$/;"	f
+main	main.c	/^int main()$/;"	f
+make_connection	server_lib.c	/^int make_connection(const char *port)$/;"	f
+make_header	http_utils.c	/^char *make_header(const char *file_name, const int status, $/;"	f
+messages_status	http_utils.c	/^const char *messages_status [] = $/;"	v
+next	request_lib.h	/^  struct request_file *prev, *next;$/;"	m	struct:request_file	typeref:struct:request_file::
+open_background_process	server_lib.c	/^void open_background_process()$/;"	f
+prev	request_lib.h	/^  struct request_file *prev, *next;$/;"	m	struct:request_file	typeref:struct:request_file::request_file
+print_request_list	request_lib.c	/^void print_request_list(struct request_file **head)$/;"	f
+receber	cliente.c	/^void *receber(void *args){$/;"	f
+receive_request_from_client	server_lib.c	/^int receive_request_from_client(const int socket_id,\\$/;"	f
+request	request_lib.h	/^  char *request;$/;"	m	struct:request_file
+request_file	request_lib.h	/^struct request_file$/;"	s
+rm_request	request_lib.c	/^struct request_file* rm_request(const int socket_id, struct request_file **head)$/;"	f
+search_request	request_lib.c	/^struct request_file* search_request(const int socket_id,$/;"	f
+sended_size	request_lib.h	/^  unsigned long file_size, sended_size;$/;"	m	struct:request_file
+set_std_response	http_utils.c	/^int set_std_response(struct request_file *r)$/;"	f
+sk	cliente.c	/^	int sk;$/;"	m	struct:__anon1	file:
+socket_id	main.c	/^int socket_id = 0;$/;"	v
+socket_id	request_lib.h	/^  int socket_id, status_request;$/;"	m	struct:request_file
+status_conection	http_utils.c	/^const char *status_conection [] = $/;"	v
+status_request	request_lib.h	/^  int socket_id, status_request;$/;"	m	struct:request_file
+std_response_file_names	http_utils.c	/^const char  *std_response_file_names[] =$/;"	v
+vector_cpy	server_lib.c	/^void vector_cpy (char *dst, char *src, int begin, int length)$/;"	f
+write_to_client	server_lib.c	/^int write_to_client (const int socket_id, struct request_file **head)$/;"	f

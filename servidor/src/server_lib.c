@@ -91,13 +91,24 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
 int receive_request_from_client(const int socket_id, 
   struct request_file **head)
 {
-  char bufin[BUFSIZE + 1];
+  char *bufin = NULL;
   int nbytes = 0, received_size = 0; 
   struct request_file *request = NULL;
+  
   request = search_request(socket_id, head);
   if (request == NULL)
     request = add_request(socket_id, head);
-  nbytes = recv(socket_id, bufin, BUFSIZE, 0);
+  bufin = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
+  if (bufin == NULL)
+    goto on_error;   
+  memset(bufin, 0, BUFSIZE + 1);
+  if (!calc_if_seg_had_pass(request))
+  {
+    nbytes = recv(socket_id, bufin, BUFSIZE, 0);
+    request->last_pack = clock();
+  } 
+  else 
+    goto on_error;
   if (request->request != NULL)
       received_size = strlen(request->request);
   else
@@ -110,10 +121,13 @@ int receive_request_from_client(const int socket_id,
     request->file_name = get_resquest_info(request);
     if (request->file_name == NULL || check_file_ready_to_send(request) < 0)
       set_std_response(request);
+    free(bufin);
     return SUCCESS;
   }
-  else
-    return ERROR;   
+  
+on_error:
+  free(bufin);
+  return ERROR;
 } 
 /*!
  * \brief Envia informacoes pro cliente conectado.
@@ -125,43 +139,66 @@ int write_to_client (const int socket_id, struct request_file **head)
 {
   int nbytes = 0;
   struct request_file *request = NULL;
+  char *bufin = NULL;
   request =  search_request(socket_id, head);
+
   if (request == NULL)
     return ERROR;
+
   if (request->header == NULL)
     request->header = make_header(request->file_name,request->status_request, 
       &(request->file_size));
   if (request->header_size_sended < strlen(request->header))
   {
-    int send_size = strlen(request->header) - request->header_size_sended;
-    if (send_size > BUFSIZE)
-      send_size = BUFSIZE; 
-    nbytes = send(socket_id, request->header + request->header_size_sended, 
-      send_size, MSG_NOSIGNAL);  
-    if (nbytes <= 0 )
-      return SUCCESS;
-    request->header_size_sended += nbytes;
-    return ERROR;
+    if (!calc_if_seg_had_pass(request))
+    {
+      int send_size = strlen(request->header) - request->header_size_sended;
+      if (send_size > BUFSIZE)
+        send_size = BUFSIZE;
+      nbytes = send(socket_id, request->header + request->header_size_sended, 
+        send_size, MSG_NOSIGNAL);  
+        request->last_pack = clock();
+      if (nbytes <= 0 )
+        return SUCCESS;
+      request->header_size_sended += nbytes;
+      return ERROR;
+    }
+    else 
+      return ERROR;
   }
   if (request->sended_size < request->file_size)
   {
-    char bufin[BUFSIZE];
-    if(request->fp == NULL)
+    if (!calc_if_seg_had_pass(request))
     {
-      request->fp = fopen(request->file_name,"r");
-      if (request->fp == NULL)
-        return ERROR;
+      bufin = (char *) malloc ((BUFSIZE + 1) * sizeof(char));
+      if (bufin == NULL)
+        goto on_error;   
+      memset(bufin, 0, BUFSIZE);
+      if(request->fp == NULL)
+      {
+        request->fp = fopen(request->file_name,"r");
+        if (request->fp == NULL)
+          goto on_error;
+      }
+            nbytes = fread(bufin, 1, BUFSIZE,request->fp);
+      nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
+      request->last_pack = clock();
+      if (bufin != NULL)
+        free(bufin);
+      if (nbytes <= 0 ) 
+        return SUCCESS;
+      request->sended_size += nbytes;
+      goto on_error;
     }
-    memset(bufin, 0, BUFSIZE);
-    nbytes = fread(bufin, 1, BUFSIZE,request->fp);
-    nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
-    if (nbytes <= 0 ) 
-      return SUCCESS;
-    request->sended_size += nbytes;
-    return ERROR;
+    else
+      return ERROR;
   }
   else
     return SUCCESS;
+on_error:
+  if (bufin != NULL)
+    free(bufin);
+  return ERROR;
 } 
 /*!
  * \brief Change the current working directory
@@ -339,4 +376,19 @@ on_error:
     " o programa necessitara de permissoes de super usuario.",
     " Range de portas 1-65535.\n");
   return ERROR;
+}
+/*!
+ * \brief Calcula se passou um segundo desde a ultima requisicao.
+ * \param[in] r Estrutura com informacoes da requisicao.
+ * \return O caso tenha passado 1 ou mais segs -1 caso nao.
+ */
+int calc_if_seg_had_pass(struct request_file *r)
+{
+  if (r->last_pack == 0)
+    r->last_pack = clock();
+  clock_t time_pass  = clock() - r->last_pack;
+  if ( (((double)time_pass)/CLOCKS_PER_SEC) > 1)
+    return SUCCESS;
+  else
+    return ERROR;
 }
