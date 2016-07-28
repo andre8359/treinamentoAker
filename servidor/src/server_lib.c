@@ -242,3 +242,23 @@ void open_background_process()
   if (pid > 0)
     exit(EXIT_SUCCESS);
 }
+/*!
+ * \brief Cria processo pra rodar o Daemon.
+ */
+int max(int a , int b)
+{
+  if (a > b)
+    return a;
+  else 
+    return b;
+}
+/*!
+ * \brief Cria processo pra rodar o Daemon.
+ */
+int min(int a , int b)
+{
+  if (a < b)
+    return a;
+  else 
+    return b;
+}

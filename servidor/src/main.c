@@ -21,8 +21,8 @@ int main()
 {
   const char port[] = "8080";
   const char root_diretory[] = "root/";
-  int new_socket_id = 0, i = 0;
-  fd_set active_fd_set, read_fd_set, write_fd_set;
+  int new_socket_id = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
+  fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
   if (change_root_directory(root_diretory) < 0)
     clean_up();
   socket_id = make_connection(port);
@@ -31,34 +31,47 @@ int main()
   if (listen(socket_id, 1) < 0)
     goto on_error;
   signal(SIGINT,clean_up); 
-  FD_ZERO (&active_fd_set);
-  FD_ZERO(&read_fd_set);
+  FD_ZERO (&active_read_fd_set);
+  FD_ZERO (&active_write_fd_set);
+  FD_ZERO (&read_fd_set);
   FD_ZERO (&write_fd_set);
-  FD_SET (socket_id, &active_fd_set);
+  FD_SET (socket_id, &active_read_fd_set);
+  min_socket = socket_id;
+  max_socket = socket_id;
 
   while (1)
   {
-    read_fd_set = active_fd_set;
+    read_fd_set = active_read_fd_set;
+    write_fd_set = active_write_fd_set;
     if (select(FD_SETSIZE, &read_fd_set, &write_fd_set, NULL, NULL) < 0)
     {
       fprintf(stderr,"Erro ao tentar selecionar sockets!\n");
       exit(EXIT_FAILURE);
     }
-    for (i = 0; i < FD_SETSIZE; i++)
+    for (i = min_socket; i <= max_socket; i++)
     {
       if (FD_ISSET (i, &read_fd_set))
       {
         if (i == socket_id)
         {
           new_socket_id = accept_new_connection(socket_id);
-          FD_SET (new_socket_id, &read_fd_set);
+          if (new_socket_id < 0)
+            goto on_error;
+          min_socket = min(min_socket,new_socket_id);
+          min_socket = max(min_socket,0);
+          max_socket = max(max_socket,new_socket_id);
+          max_socket = min(max_socket,FD_SETSIZE);
+          FD_SET (new_socket_id, &active_read_fd_set);
         }
         else
         {
-           if (receive_request_from_client(i, &head) == 0)
+           if (i == socket_id)
+             break;
+           else if (receive_request_from_client(i, &head) == 0)
            {
-             FD_SET(i, &write_fd_set);
-             FD_CLR(i, &read_fd_set);
+            // print_request_list(&head);
+             FD_SET(i, &active_write_fd_set);
+             FD_CLR(i, &active_read_fd_set);
            } 
         }
       }
@@ -66,12 +79,12 @@ int main()
       {
         if (write_to_client(i, &head) == 0)
           //fprintf(stderr,"."); 
-       // else
+        //else
         {
           //struct request_file *r = search_request(i, &head);
           //fprintf(stderr,"\nEnvio arquivo finalizado --> %s!\n",r->file_name );
           rm_request(i, &head);
-          FD_CLR(i, &write_fd_set);
+          FD_CLR(i, &active_write_fd_set);
         }
       }
     }
