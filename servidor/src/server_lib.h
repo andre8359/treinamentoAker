@@ -31,4 +31,6 @@ int check_file_ready_to_send(struct request_file * request);
 void close_std_file_desc();
 void open_background_process();
 void clean_up();
+int max(int a , int b);
+int min(int a , int b);
 #endif /* SERVER_LIB_H */
