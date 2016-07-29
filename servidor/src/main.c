@@ -24,10 +24,17 @@ int main(int argc,  char *argv[])
   int new_socket_id = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
   int div_factor = 0;
   long speed_limit = 0;
+
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
   port = params_is_valid(argc, argv, &speed_limit);
-
-  if (speed_limit > BUFSIZE)
+  
+  if (port < 0)
+    goto on_error;
+  
+  if (speed_limit == 0)
+    speed_limit = LONG_MAX;
+  
+  if (speed_limit >= BUFSIZE)
     div_factor = 1;
   else
     div_factor = (long) BUFSIZE/speed_limit;

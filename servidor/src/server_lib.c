@@ -96,8 +96,8 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int receive_request_from_client(const int socket_id, 
-                                struct request_file **head, unsigned long buf_size, long div_factor)
+int receive_request_from_client(const int socket_id, struct request_file **head,
+                                long buf_size, long div_factor)
 {
   char bufin[BUFSIZE/div_factor + 1];
   int nbytes = 0, received_size = 0; 
@@ -198,7 +198,7 @@ int send_to_client (const int socket_id, struct request_file **head,
   if (send_header_to_client(&request, buf_size, div_factor))
     return ERROR;
 
-  if (request->sended_size < request->file_size)
+  if (request->sended_size >= request->file_size)
     return SUCCESS;
 
   memset(bufin, 0, BUFSIZE/div_factor);
@@ -377,10 +377,10 @@ on_error:
  */
 long params_is_valid(int argc , char *argv[], long *speed_limit)
 {
-  char *port, *root_diretory, *end, *sd_limit;
+  char *port = NULL, *root_diretory = NULL, *end = NULL, *sp_limit = NULL;
   long port_int = 0;
   const int base = 10, port_range_max = 65535;
-  int ret = get_param(argc, argv, &port, &root_diretory, &sd_limit);
+  int ret = get_param(argc, argv, &port, &root_diretory, &sp_limit);
 
   if ( ret < 0)
     goto on_error;
@@ -395,17 +395,20 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
       || (port_int <= 0 || port_int > port_range_max))
     goto on_error;
 
-  errno = 0; 
+  if (sp_limit)
+  {
+    errno = 0; 
 
-  *speed_limit = strtol(sd_limit, &end, base);
+    *speed_limit = strtol(sp_limit, &end, base);
 
-  if ((errno == ERANGE && (*speed_limit == LONG_MAX ||*speed_limit == LONG_MIN))
-      || (*speed_limit <= 0))
-    goto on_error;
+    if ((errno == ERANGE && (*speed_limit == LONG_MAX ||
+                             *speed_limit == LONG_MIN))|| 
+                             (*speed_limit <= 0))
+      goto on_error;
 
-  if (*speed_limit < 1024 || strncmp(argv[0],"sudo", 4))
-    goto on_error;
-
+    if (*speed_limit < 1024 &&  strncmp(argv[0],"sudo", 4))
+      goto on_error;
+  }
   if (change_root_directory(root_diretory) < 0)
   {
     fprintf(stderr, "Nao foi possivel definir esse diretorio como raiz!\n");
