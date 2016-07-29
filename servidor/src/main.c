@@ -22,17 +22,26 @@ int main(int argc,  char *argv[])
 {
   long port = 0;
   int new_socket_id = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
+  int div_factor = 0;
   long speed_limit = 0;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
   port = params_is_valid(argc, argv, &speed_limit);
-  if (port <= 0)
-    clean_up();
+
+  if (speed_limit > BUFSIZE)
+    div_factor = 1;
+  else
+    div_factor = (long) BUFSIZE/speed_limit;
+
   socket_id = make_connection(port);
+
   if (socket_id < 0)
     goto on_error;
+
   if (listen(socket_id, 1) < 0)
     goto on_error;
+
   signal(SIGINT,clean_up); 
+
   FD_ZERO (&active_read_fd_set);
   FD_ZERO (&active_write_fd_set);
   FD_ZERO (&read_fd_set);
@@ -67,18 +76,19 @@ int main(int argc,  char *argv[])
         }
         else
         {
-           if (i == socket_id)
-             break;
-           else if (receive_request_from_client(i, &head, speed_limit) == 0)
-           {
-             FD_SET(i, &active_write_fd_set);
-             FD_CLR(i, &active_read_fd_set);
-           } 
+          if (i == socket_id)
+            break;
+          else if (receive_request_from_client(i, &head, speed_limit,
+                                               div_factor) == 0)
+          {
+            FD_SET(i, &active_write_fd_set);
+            FD_CLR(i, &active_read_fd_set);
+          } 
         }
       }
       else if (FD_ISSET(i, &write_fd_set))
       {
-        if (write_to_client(i, &head, speed_limit) == 0)
+        if (send_to_client(i, &head, speed_limit, div_factor) == 0)
         {
           rm_request(i, &head);
           FD_CLR(i, &active_write_fd_set);

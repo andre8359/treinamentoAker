@@ -8,6 +8,8 @@
 #include <sys/time.h>
 #include <time.h>
 #define PATH_MAX 4096
+#define ERROR -1
+#define SUCCESS 0
 struct request_file
 {
   FILE *fp;
@@ -15,16 +17,16 @@ struct request_file
   char *header;
   char *request;
   unsigned long header_size_sended;
-  unsigned long file_size, sended_size;
+  unsigned long file_size, sended_size, transf_last_sec;
   int socket_id, status_request;
-  clock_t last_pack;
+  time_t last_pack;
   struct request_file *prev, *next;
 };
 struct request_file* add_request(const int socket_id, 
-  struct request_file **head);
-struct request_file *rm_request(const int socket_id, struct request_file **head);
+                                 struct request_file **head);
+int rm_request(const int socket_id, struct request_file **head);
 struct request_file *search_request(const int socket_id, 
-  struct request_file **head);
+                                    struct request_file **head);
 void free_request_list(struct request_file **head);
 void print_request_list(struct request_file **head);
 #endif /* REQUEST_LIB_H */

@@ -25,8 +25,8 @@ int create_socket(const struct sockaddr_in *p)
 void config_connection(const long port, struct sockaddr_in *serv_info)
 { 
   serv_info->sin_family = AF_INET;           
-	serv_info->sin_addr.s_addr = INADDR_ANY; 	
-	serv_info->sin_port = htons(port); 
+  serv_info->sin_addr.s_addr = INADDR_ANY; 	
+  serv_info->sin_port = htons(port); 
 }
 /*!
  * \brief Cria socket e faz o bind com a porta especificada.
@@ -42,11 +42,15 @@ int make_connection(const long port)
   memset(&serv_info, 0, sizeof(serv_info)); 
   config_connection(port, &serv_info);
   socket_id = create_socket(&serv_info);
+
   if (socket_id < 0)
     return ERROR;
+
   len = sizeof(serv_info);
+
   if (bind(socket_id, (struct sockaddr *) &serv_info, len) < 0)
     return ERROR;
+
   return socket_id; 
 }
 /*!
@@ -60,13 +64,15 @@ int accept_new_connection(const int socket_id)
   struct sockaddr_in client_info;
   socklen_t client_len;
   int new_socket_id;
+
   client_len = sizeof (client_info);                                    
-  new_socket_id = accept (socket_id,(struct sockaddr *) &client_info, \
-    &client_len);                                                       
+  new_socket_id = accept (socket_id,(struct sockaddr *) &client_info,
+                          &client_len);                                        
   if (new_socket_id < 0)                                                
     return ERROR;                                                     
+
   fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",      
-  inet_ntoa (client_info.sin_addr), ntohs (client_info.sin_port));
+           inet_ntoa (client_info.sin_addr), ntohs (client_info.sin_port));
   return new_socket_id;
 }
 /*!
@@ -79,9 +85,11 @@ int accept_new_connection(const int socket_id)
 void vector_cpy (char *dst, const char *src, const int begin, const int length)
 {
   int i, j = begin;
+
   for (i = 0; i <= length; i++)
     dst[i+j] = src[i];
 }
+
 /*!
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
@@ -89,135 +97,147 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
 int receive_request_from_client(const int socket_id, 
-  struct request_file **head, long buf_size)
+                                struct request_file **head, unsigned long buf_size, long div_factor)
 {
-  char *bufin = NULL;
+  char bufin[BUFSIZE/div_factor + 1];
   int nbytes = 0, received_size = 0; 
   struct request_file *request = NULL;
-  
+
   request = search_request(socket_id, head);
+
   if (request == NULL)
     request = add_request(socket_id, head);
-  bufin = (char *) malloc ((buf_size + 1) * sizeof(char));
-  if (bufin == NULL)
-    goto on_error;   
-  memset(bufin, 0, buf_size + 1);
-  if (!calc_if_seg_had_pass(request))
+
+  memset(bufin, 0, (BUFSIZE/div_factor) + 1);
+
+  calc_if_sec_had_pass(&request);
+
+  if (request->transf_last_sec < buf_size)
   {
-    nbytes = recv(socket_id, bufin, buf_size, 0);
-    request->last_pack = clock();
-  } 
-  else 
-    goto on_error;
-  if (request->request != NULL)
-      received_size = strlen(request->request);
+    nbytes = recv(socket_id, bufin, BUFSIZE/div_factor, 0);
+    request->transf_last_sec += nbytes;
+  }
   else
-      received_size = 0;
+    return ERROR;
+
+  if (request->request != NULL)
+    received_size = strlen(request->request);
+  else
+    received_size = 0;
+
   request->request = realloc(request->request, received_size + nbytes + 1);
   vector_cpy(request->request, bufin, received_size, nbytes - 1);
   request->request[received_size + nbytes ] = '\0';
+
   if (!find_end_request(request->request))
   {
     request->file_name = get_resquest_info(request);
+
     if (request->file_name == NULL || check_file_ready_to_send(request) < 0)
       set_std_response(request);
-    free(bufin);
+
     return SUCCESS;
   }
-  
-on_error:
-  free(bufin);
+
   return ERROR;
 } 
+/*!
+ * \brief Envia header pro cliente conectado.
+ * \param[in] socket_id Descritor do socket da conexao.
+ * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
+ * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
+ */
+static int send_header_to_client(struct request_file **r, unsigned long buf_size, 
+                                 long div_factor)
+{
+  int send_size = 0, nbytes = 0;
+  struct request_file *request = *r;
+
+  if (request->header == NULL)
+    request->header = make_header(request->file_name, request->status_request,
+                                  &(request->file_size));
+
+  if (request->header_size_sended >= strlen(request->header))
+    return SUCCESS;
+
+  send_size = strlen(request->header) - request->header_size_sended;
+
+  if (send_size > (BUFSIZE/div_factor))
+    send_size = (BUFSIZE/div_factor);
+
+  if ((request->transf_last_sec + send_size) < buf_size)
+  {
+    nbytes = send(request->socket_id, request->header
+                  + request->header_size_sended, send_size, MSG_NOSIGNAL);  
+    if (nbytes <= 0)
+      return SUCCESS;
+
+    request->header_size_sended += nbytes;
+    return ERROR;
+  }
+
+  return SUCCESS;
+}
 /*!
  * \brief Envia informacoes pro cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int write_to_client (const int socket_id, struct request_file **head, 
-  long buf_size)
+int send_to_client (const int socket_id, struct request_file **head, 
+                    unsigned long buf_size, long div_factor)
 {
   int nbytes = 0;
   struct request_file *request = NULL;
-  char *bufin = NULL;
+  char bufin[BUFSIZE/div_factor];
   request =  search_request(socket_id, head);
 
   if (request == NULL)
     return ERROR;
 
-  if (request->header == NULL)
-    request->header = make_header(request->file_name,request->status_request, 
-      &(request->file_size));
-  if (request->header_size_sended < strlen(request->header))
-  {
-    if (!calc_if_seg_had_pass(request))
-    {
-      int send_size = strlen(request->header) - request->header_size_sended;
-      if (send_size > buf_size)
-        send_size = buf_size;
-      nbytes = send(socket_id, request->header + request->header_size_sended, 
-        send_size, MSG_NOSIGNAL);  
-        request->last_pack = clock();
-      if (nbytes <= 0 )
-        return SUCCESS;
-      request->header_size_sended += nbytes;
-      return ERROR;
-    }
-    else 
-      return ERROR;
-  }
+  if (send_header_to_client(&request, buf_size, div_factor))
+    return ERROR;
+
   if (request->sended_size < request->file_size)
+    return SUCCESS;
+
+  memset(bufin, 0, BUFSIZE/div_factor);
+  if(request->fp == NULL)
   {
-    if (!calc_if_seg_had_pass(request))
-    {
-      bufin = (char *) malloc ((buf_size + 1) * sizeof(char));
-      if (bufin == NULL)
-        goto on_error;   
-      memset(bufin, 0, buf_size);
-      if(request->fp == NULL)
-      {
-        request->fp = fopen(request->file_name,"r");
-        if (request->fp == NULL)
-          goto on_error;
-      }
-            nbytes = fread(bufin, 1, buf_size,request->fp);
-      nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
-      request->last_pack = clock();
-      if (bufin != NULL)
-      {
-        free(bufin);
-        bufin = NULL;
-      }
-      if (nbytes <= 0 ) 
-        return SUCCESS;
-      request->sended_size += nbytes;
-      goto on_error;
-    }
-    else
+    request->fp = fopen(request->file_name,"r");
+
+    if (request->fp == NULL)
       return ERROR;
   }
-  else
+
+  calc_if_sec_had_pass(&request);
+
+  if ((request->transf_last_sec) > buf_size)
+    return ERROR;
+
+  nbytes = fread(bufin, 1, (BUFSIZE/div_factor),request->fp);
+  nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
+  if (nbytes <= 0 ) 
     return SUCCESS;
-on_error:
-  if (bufin != NULL)
-    free(bufin);
+  request->sended_size += nbytes;
+  request->transf_last_sec += nbytes;
   return ERROR;
+
+  return SUCCESS;
 } 
 /*!
- * \brief Change the current working directory
+ * \brief Change the current working directoy
  * \param[in] root_diretory Diretorio que sera considera a raiz do servidor.
  * \return Retorna 0 caso tenha mudado com sucesso ou -1 caso nao.
-*/
+ */
 int change_root_directory(const char *root_directory)
 {
   if ((chdir(root_directory)) < 0) 
-  {
-    fprintf(stderr,"Nao foi possivel mudar diretorio root!");
     return ERROR;
-  }
+
   if (create_default_response_files() < 0)
     return ERROR;
+
   return SUCCESS;
 }
 /*!
@@ -227,32 +247,32 @@ int change_root_directory(const char *root_directory)
  */
 int check_file_ready_to_send(struct request_file * request)
 {
+  char root_diretory[PATH_MAX];
+  char abs_path[PATH_MAX];
+
   if (request->file_name == NULL)
     return ERROR;
-  
+
   if (access(request->file_name, F_OK) != -1) 
   {
-    char root_diretory[PATH_MAX];
     getcwd(root_diretory,PATH_MAX);
-    char abs_path[PATH_MAX];
     realpath(request->file_name, abs_path);
     if (strstr(abs_path, root_diretory) == NULL)
     {
       request->status_request = FORBIDDEN;
       return ERROR;
     }
-    if (access(request->file_name, R_OK) < 0)
+    else if (access(request->file_name, R_OK) < 0)
     { 
       request->status_request = UNAUTHORIZED;
       return ERROR;
     }
+
+    return SUCCESS; 
   }
-  else
-  {
-    request->status_request = NOT_FOUND;
-    return ERROR;
-  }
-  return SUCCESS; 
+
+  request->status_request = NOT_FOUND;
+  return ERROR;
 }
 /*!
  * \brief Fecha os arquivos abertos pelo SO (STDIN, STDOUT, STDERR).
@@ -285,8 +305,8 @@ int max(const int a , const int b)
 {
   if (a > b)
     return a;
-  else 
-    return b;
+
+  return b;
 }
 /*!
  * \brief Retorna o menor entre dois inteiros.
@@ -298,8 +318,8 @@ int min(const int a , const int b)
 {
   if (a < b)
     return a;
-  else 
-    return b;
+
+  return b;
 }
 /*!
  * \brief Realiza a coleta dos parametros de entrada.
@@ -310,11 +330,11 @@ int min(const int a , const int b)
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
 static int get_param(int argc, char *argv[], char **port, char **root_directory,
-  char **speed_limit)
+                     char **speed_limit)
 {
   int c;
   opterr = 0;
-  if (argc < 7)
+  if (argc < 5)
     goto on_error;
   while ((c = getopt(argc, argv, "p:d:l:")) != -1)
   {
@@ -344,8 +364,8 @@ static int get_param(int argc, char *argv[], char **port, char **root_directory,
     default:
       goto on_error;
     }
-   }
-   return 0;
+  }
+  return SUCCESS;
 on_error:
   return ERROR;
 }
@@ -361,35 +381,45 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
   long port_int = 0;
   const int base = 10, port_range_max = 65535;
   int ret = get_param(argc, argv, &port, &root_diretory, &sd_limit);
+
   if ( ret < 0)
     goto on_error;
+
   if (port == NULL || root_diretory == NULL)
     goto on_error;
 
   errno = 0;
-  port_int = strtol(port, &end, base);
+
+  port_int = strtol(port, &end, base);  
   if ((errno == ERANGE && (port_int == LONG_MAX || port_int == LONG_MIN))
-     || (port_int <= 0 || port_int > port_range_max))
+      || (port_int <= 0 || port_int > port_range_max))
     goto on_error;
+
   errno = 0; 
+
   *speed_limit = strtol(sd_limit, &end, base);
-   if ((errno == ERANGE && (*speed_limit == LONG_MAX ||*speed_limit == LONG_MIN))
-     || (*speed_limit <= 0))
+
+  if ((errno == ERANGE && (*speed_limit == LONG_MAX ||*speed_limit == LONG_MIN))
+      || (*speed_limit <= 0))
+    goto on_error;
+
+  if (*speed_limit < 1024 || strncmp(argv[0],"sudo", 4))
     goto on_error;
 
   if (change_root_directory(root_diretory) < 0)
   {
     fprintf(stderr, "Nao foi possivel definir esse diretorio como raiz!\n");
-    return ERROR;
+    goto on_error;
   }
   return port_int;
+
 on_error:
   fprintf(stderr, "%s%s%s%s%s",
-    "Linha de comando incompleta :\n",
-    "\t\t ./prog -p <PORTA> -d <DIRETORIO RAIZ> -l <limite de velocidade>\n\n", 
-    "Lembre que caso o valor da porta seja menor que 1023 ",
-    " o programa necessitara de permissoes de super usuario.",
-    " Range de portas 1-65535.\n O limite de velocidade deve ser em bytes/s\n\n");
+          "Linha de comando incompleta :\n",
+          "\t\t ./prog -p <PORTA> -d <DIRETORIO> -l <limite de velocidade>\n\n", 
+          "Lembre que caso o valor da porta seja menor que 1023 ",
+          " o programa necessitara de permissoes de super usuario. ",
+          "Range de portas 1-65535.\nO limite de velocidade e dado em bytes/s\n");
   return ERROR;
 }
 /*!
@@ -397,13 +427,19 @@ on_error:
  * \param[in] r Estrutura com informacoes da requisicao.
  * \return O caso tenha passado 1 ou mais segs -1 caso nao.
  */
-int calc_if_seg_had_pass(struct request_file *r)
+void calc_if_sec_had_pass(struct request_file **r)
 {
-  if (r->last_pack == 0)
-    r->last_pack = clock();
-  clock_t time_pass  = clock() - r->last_pack;
-  if ( (((double)time_pass)/CLOCKS_PER_SEC) > 1)
-    return SUCCESS;
-  else
-    return ERROR;
+  time_t now = time(NULL);
+  double sec = 0;  
+
+  if ((*r)->last_pack == 0)
+    (*r)->last_pack = time(NULL);
+
+  sec = difftime(now, (*r)->last_pack);
+
+  if (sec > 1)
+  {
+    (*r)->transf_last_sec = 0;
+    (*r)->last_pack = time(NULL);
+  }
 }
