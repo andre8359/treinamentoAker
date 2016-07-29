@@ -7,15 +7,15 @@
 #include "server_lib.h"
 /*!
  * \brief Cria um socket.
- * \param[in]  p Estrutura que contem as informacoes necessarias para abertura 
+ * \param[in]  p Estrutura que contem as informacoes necessarias para abertura
  *  do socket.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de 
+ * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
 int create_socket(const struct sockaddr_in *p)
 {
   int socket_id = 0;
-  if ((socket_id = socket(p->sin_family, SOCK_STREAM, 0)) == -1) 
+  if ((socket_id = socket(p->sin_family, SOCK_STREAM, 0)) == -1)
     return ERROR;
   return socket_id;
 }
@@ -23,15 +23,15 @@ int create_socket(const struct sockaddr_in *p)
  * \brief Seta as informacoes necessarias para criar um socket.
  */
 void config_connection(const long port, struct sockaddr_in *serv_info)
-{ 
-  serv_info->sin_family = AF_INET;           
-  serv_info->sin_addr.s_addr = INADDR_ANY; 	
-  serv_info->sin_port = htons(port); 
+{
+  serv_info->sin_family = AF_INET;
+  serv_info->sin_addr.s_addr = INADDR_ANY;
+  serv_info->sin_port = htons(port);
 }
 /*!
  * \brief Cria socket e faz o bind com a porta especificada.
- * \param[in]  port  Inteiro que indica em qual porta a conexao acontecera. 
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de 
+ * \param[in]  port  Inteiro que indica em qual porta a conexao acontecera.
+ * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
 int make_connection(const long port)
@@ -39,7 +39,7 @@ int make_connection(const long port)
   struct sockaddr_in serv_info;
   int socket_id = 0;
   socklen_t len = 0;
-  memset(&serv_info, 0, sizeof(serv_info)); 
+  memset(&serv_info, 0, sizeof(serv_info));
   config_connection(port, &serv_info);
   socket_id = create_socket(&serv_info);
 
@@ -51,12 +51,12 @@ int make_connection(const long port)
   if (bind(socket_id, (struct sockaddr *) &serv_info, len) < 0)
     return ERROR;
 
-  return socket_id; 
+  return socket_id;
 }
 /*!
  * \brief Aceita novas conexoes.
  * \param[in]  socket_id Descritor do socket onde ocoreu o bind.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de 
+ * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
 int accept_new_connection(const int socket_id)
@@ -65,13 +65,13 @@ int accept_new_connection(const int socket_id)
   socklen_t client_len;
   int new_socket_id;
 
-  client_len = sizeof (client_info);                                    
+  client_len = sizeof (client_info);
   new_socket_id = accept (socket_id,(struct sockaddr *) &client_info,
-                          &client_len);                                        
-  if (new_socket_id < 0)                                                
-    return ERROR;                                                     
+                          &client_len);
+  if (new_socket_id < 0)
+    return ERROR;
 
-  fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",      
+  fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",
            inet_ntoa (client_info.sin_addr), ntohs (client_info.sin_port));
   return new_socket_id;
 }
@@ -100,7 +100,7 @@ int receive_request_from_client(const int socket_id, struct request_file **head,
                                 long buf_size, long div_factor)
 {
   char bufin[BUFSIZE/div_factor + 1];
-  int nbytes = 0, received_size = 0; 
+  int nbytes = 0, received_size = 0;
   struct request_file *request = NULL;
 
   request = search_request(socket_id, head);
@@ -140,14 +140,14 @@ int receive_request_from_client(const int socket_id, struct request_file **head,
   }
 
   return ERROR;
-} 
+}
 /*!
  * \brief Envia header pro cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-static int send_header_to_client(struct request_file **r, unsigned long buf_size, 
+static int send_header_to_client(struct request_file **r, long buf_size,
                                  long div_factor)
 {
   int send_size = 0, nbytes = 0;
@@ -157,7 +157,7 @@ static int send_header_to_client(struct request_file **r, unsigned long buf_size
     request->header = make_header(request->file_name, request->status_request,
                                   &(request->file_size));
 
-  if (request->header_size_sended >= strlen(request->header))
+  if ((unsigned)request->header_size_sended >= strlen(request->header))
     return SUCCESS;
 
   send_size = strlen(request->header) - request->header_size_sended;
@@ -168,7 +168,7 @@ static int send_header_to_client(struct request_file **r, unsigned long buf_size
   if ((request->transf_last_sec + send_size) < buf_size)
   {
     nbytes = send(request->socket_id, request->header
-                  + request->header_size_sended, send_size, MSG_NOSIGNAL);  
+                  + request->header_size_sended, send_size, MSG_NOSIGNAL);
     if (nbytes <= 0)
       return SUCCESS;
 
@@ -184,8 +184,8 @@ static int send_header_to_client(struct request_file **r, unsigned long buf_size
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int send_to_client (const int socket_id, struct request_file **head, 
-                    unsigned long buf_size, long div_factor)
+int send_to_client (const int socket_id, struct request_file **head,
+                    long buf_size, long div_factor)
 {
   int nbytes = 0;
   struct request_file *request = NULL;
@@ -217,14 +217,14 @@ int send_to_client (const int socket_id, struct request_file **head,
 
   nbytes = fread(bufin, 1, (BUFSIZE/div_factor),request->fp);
   nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
-  if (nbytes <= 0 ) 
+  if (nbytes <= 0 )
     return SUCCESS;
   request->sended_size += nbytes;
   request->transf_last_sec += nbytes;
   return ERROR;
 
   return SUCCESS;
-} 
+}
 /*!
  * \brief Change the current working directoy
  * \param[in] root_diretory Diretorio que sera considera a raiz do servidor.
@@ -232,7 +232,7 @@ int send_to_client (const int socket_id, struct request_file **head,
  */
 int change_root_directory(const char *root_directory)
 {
-  if ((chdir(root_directory)) < 0) 
+  if ((chdir(root_directory)) < 0)
     return ERROR;
 
   if (create_default_response_files() < 0)
@@ -253,7 +253,7 @@ int check_file_ready_to_send(struct request_file * request)
   if (request->file_name == NULL)
     return ERROR;
 
-  if (access(request->file_name, F_OK) != -1) 
+  if (access(request->file_name, F_OK) != -1)
   {
     getcwd(root_diretory,PATH_MAX);
     realpath(request->file_name, abs_path);
@@ -263,12 +263,12 @@ int check_file_ready_to_send(struct request_file * request)
       return ERROR;
     }
     else if (access(request->file_name, R_OK) < 0)
-    { 
+    {
       request->status_request = UNAUTHORIZED;
       return ERROR;
     }
 
-    return SUCCESS; 
+    return SUCCESS;
   }
 
   request->status_request = NOT_FOUND;
@@ -372,7 +372,7 @@ on_error:
 /*!
  * \brief Realiza a validacao dos parametros de entrada.
  * \param[in]  argc Numero de parametros passados na linha de comando.
- * \param[in]  argv Lista de parametros passados na linha de comando. 
+ * \param[in]  argv Lista de parametros passados na linha de comando.
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
 long params_is_valid(int argc , char *argv[], long *speed_limit)
@@ -390,24 +390,25 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
 
   errno = 0;
 
-  port_int = strtol(port, &end, base);  
+  port_int = strtol(port, &end, base);
   if ((errno == ERANGE && (port_int == LONG_MAX || port_int == LONG_MIN))
       || (port_int <= 0 || port_int > port_range_max))
     goto on_error;
 
+  if (port_int < 1024 &&  strncmp(argv[0],"sudo", 4))
+      goto on_error;
+
   if (sp_limit)
   {
-    errno = 0; 
+    errno = 0;
 
     *speed_limit = strtol(sp_limit, &end, base);
 
     if ((errno == ERANGE && (*speed_limit == LONG_MAX ||
-                             *speed_limit == LONG_MIN))|| 
+                             *speed_limit == LONG_MIN))||
                              (*speed_limit <= 0))
       goto on_error;
 
-    if (*speed_limit < 1024 &&  strncmp(argv[0],"sudo", 4))
-      goto on_error;
   }
   if (change_root_directory(root_diretory) < 0)
   {
@@ -419,7 +420,7 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
 on_error:
   fprintf(stderr, "%s%s%s%s%s",
           "Linha de comando incompleta :\n",
-          "\t\t ./prog -p <PORTA> -d <DIRETORIO> -l <limite de velocidade>\n\n", 
+          "\t\t ./prog -p <PORTA> -d <DIRETORIO> -l <limite de velocidade>\n\n",
           "Lembre que caso o valor da porta seja menor que 1023 ",
           " o programa necessitara de permissoes de super usuario. ",
           "Range de portas 1-65535.\nO limite de velocidade e dado em bytes/s\n");
@@ -433,7 +434,7 @@ on_error:
 void calc_if_sec_had_pass(struct request_file **r)
 {
   time_t now = time(NULL);
-  double sec = 0;  
+  double sec = 0;
 
   if ((*r)->last_pack == 0)
     (*r)->last_pack = time(NULL);

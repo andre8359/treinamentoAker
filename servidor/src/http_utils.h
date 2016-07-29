@@ -17,8 +17,8 @@
 #define MAX_HEADER_SIZE 4000
 int find_end_request(char *header);
 char *get_resquest_info(struct request_file *request);
-char *make_header(const char *file_name, const int status, 
-  unsigned long *file_size);
+char *make_header(const char *file_name, const int status,
+                  long *file_size);
 int create_default_response_files();
 int set_std_response(struct request_file *r);
 #endif /* SERVER_LIB_H */

@@ -13,19 +13,16 @@
 struct request_file
 {
   FILE *fp;
-  char *file_name;
-  char *header;
-  char *request;
-  unsigned long header_size_sended;
-  unsigned long file_size, sended_size, transf_last_sec;
+  char *file_name, *header, *request;
+  long header_size_sended, file_size, sended_size, transf_last_sec;
   int socket_id, status_request;
   time_t last_pack;
   struct request_file *prev, *next;
 };
-struct request_file* add_request(const int socket_id, 
+struct request_file* add_request(const int socket_id,
                                  struct request_file **head);
 int rm_request(const int socket_id, struct request_file **head);
-struct request_file *search_request(const int socket_id, 
+struct request_file *search_request(const int socket_id,
                                     struct request_file **head);
 void free_request_list(struct request_file **head);
 void print_request_list(struct request_file **head);
