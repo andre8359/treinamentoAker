@@ -2,7 +2,7 @@
 #include "request_lib.h"
 #include "http_utils.h"
 
-int server_socket = 0;
+int server_socket = 0, end_prog = 1;
 struct request_file *head = NULL;
 
 /*!
@@ -14,7 +14,7 @@ void clean_up()
   free_request_list(&head);
   if (server_socket)
     close(server_socket);
-  exit(EXIT_FAILURE);
+  end_prog = 0;
 }
 
 int main(int argc,  char *argv[])
@@ -23,7 +23,8 @@ int main(int argc,  char *argv[])
   int client_socket = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
   int div_factor = 0;
   long speed_limit = 0;
-  struct timeval time_out;
+  struct timeval time_out, time_waiting;
+  memset(&time_waiting, 0, sizeof(time_waiting));
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
@@ -59,11 +60,11 @@ int main(int argc,  char *argv[])
   max_socket = server_socket+1;
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
-  while (1)
+  while (end_prog)
   {
     read_fd_set = active_read_fd_set;
     write_fd_set = active_write_fd_set;
-    if (select(max_socket + 1, &read_fd_set, &write_fd_set, NULL,&time_out) < 0)
+    if (select(max_socket+1, &read_fd_set, &write_fd_set, NULL,&time_out) < 0)
     {
       fprintf(stderr,"Erro ao tentar selecionar sockets!\n");
       goto on_error;
@@ -83,9 +84,8 @@ int main(int argc,  char *argv[])
           max_socket = min(max_socket,FD_SETSIZE);
           FD_SET (client_socket, &active_read_fd_set);
         }
-        else
-          if (receive_request_from_client(i, &head, speed_limit,
-                                               div_factor) == 0)
+        else if (receive_request_from_client(i, &head, speed_limit,
+                                             div_factor) == 0)
           {
             FD_SET(i, &active_write_fd_set);
             FD_CLR(i, &active_read_fd_set);
@@ -98,17 +98,14 @@ int main(int argc,  char *argv[])
           FD_CLR(i, &active_write_fd_set);
         }
     }
-    fprintf(stderr, "%ld s %ld us\n", time_out.tv_sec, time_out.tv_usec);
+    if (head && ((time_out.tv_sec - head->last_pack.tv_sec) < 1
+                 && ((head->transf_last_sec + (BUFSIZE/div_factor))
+                 > speed_limit)))
+      usleep(1e6 - (time_waiting.tv_usec - head->last_pack.tv_usec));
     time_out.tv_sec = 1;
     time_out.tv_usec = 0;
-    sleep(1);
-
   }
-  close_std_file_desc();
+
 on_error:
-  if (server_socket)
-    close(server_socket);
-  if (client_socket)
-    close(client_socket);
   return 0;
 }
