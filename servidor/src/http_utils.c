@@ -87,21 +87,18 @@ char *get_resquest_info(struct request_file *request)
 }
 int set_std_response(struct request_file *r)
 {
-  if (r->status_request != OK)
+  struct stat st;
+
+  free(r->file_name);
+  r->file_name = strdup(std_response_file_names[r->status_request - 1]);
+
+  stat(r->file_name, &st);
+  if (st.st_size > 0)
+    r->file_size = st.st_size;
+  else
   {
-    free(r->file_name);
-    r->file_name =
-      strdup(std_response_file_names[r->status_request - 1]);
-    struct stat st;
-    stat(r->file_name, &st);
-    if (st.st_size > 0)
-      r->file_size = st.st_size;
-    else
-    {
-      r->file_size = 0;
-      return -1;
-    }
-    return 0;
+    r->file_size = 0;
+    return -1;
   }
   return 0;
 }
