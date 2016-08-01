@@ -39,8 +39,8 @@ struct request_file* add_request(const int socket_id,
 /*!
  * \brief Realiza a liberacao da memoria alocada para um elemento da lista.
  * \param[in]  r Ponteiro para o elemento que sera desalocado.
- * \return  NULL em caso de sucesso ou um ponteiro para nova requisicao em caso de
- *  falha.
+ * \return  NULL em caso de sucesso ou um ponteiro para nova requisicao em caso
+ *  de falha.
  */
 static void free_request_file(struct request_file **r)
 {
