@@ -9,13 +9,14 @@ CFLAGS=-Wall -Wextra
 ifdef RELEASE
 	CFLAGS += -O2
 else
-#	CFLAGS += -ggdb3 -fsanitize=address
-  CFLAGS += -ggdb3 
+  CFLAGS += -ggdb3 -fsanitize=address
+  #CFLAGS += -ggdb3
 endif
 
 LIBS=-lm
 
-_DEPS = server_lib.c request_lib.c http_utils.c
+_DEPS_C = server_lib.c request_lib.c http_utils.c
+_DEPS = $(_DEPS_C) $(patsubst %.c,%.h,$(_DEPS_C))
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
 _OBJ = main.o server_lib.o request_lib.o http_utils.o
@@ -29,4 +30,4 @@ prog: $(OBJ)
 .PHONY: clean
 
 clean:
-	rm -f $(ODIR)/*.o *~ core $(INCDIR)/*~ 
+	rm -f $(ODIR)/*.o *~ core $(INCDIR)/*~
