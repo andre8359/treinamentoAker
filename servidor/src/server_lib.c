@@ -212,7 +212,7 @@ int send_to_client (const int socket_id, struct request_file **head,
 
   calc_if_sec_had_pass(&request);
 
-  if ((request->transf_last_sec) > buf_size)
+  if ((request->transf_last_sec) + (BUFSIZE/div_factor) > buf_size)
     return ERROR;
 
   nbytes = fread(bufin, 1, (BUFSIZE/div_factor),request->fp);
@@ -329,7 +329,7 @@ int min(const int a , const int b)
  * \param[out] root_directory Diretorio que sera considerado a raiz do servidor.
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
-static int get_param(int argc, char *argv[], char **port, char **root_directory,
+static int get_param(int argc, char *argv[], char **port,char **root_directory,
                      char **speed_limit)
 {
   int c;
@@ -423,27 +423,28 @@ on_error:
           "\t\t ./prog -p <PORTA> -d <DIRETORIO> -l <limite de velocidade>\n\n",
           "Lembre que caso o valor da porta seja menor que 1023 ",
           " o programa necessitara de permissoes de super usuario. ",
-          "Range de portas 1-65535.\nO limite de velocidade e dado em bytes/s\n");
+          "Range de portas 1-65535.\nO limite de velocidatde e dado em bytes/s\n");
   return ERROR;
 }
 /*!
  * \brief Calcula se passou um segundo desde a ultima requisicao.
- * \param[in] r Estrutura com informacoes da requisicao.
+ * [in] r Estrutura com informacoes da requisicao.
  * \return O caso tenha passado 1 ou mais segs -1 caso nao.
  */
 void calc_if_sec_had_pass(struct request_file **r)
 {
-  time_t now = time(NULL);
+  struct timeval now;
   double sec = 0;
 
-  if ((*r)->last_pack == 0)
-    (*r)->last_pack = time(NULL);
+  if ((*r)->last_pack.tv_sec == 0 && (*r)->last_pack.tv_usec == 0)
+    gettimeofday(&((*r)->last_pack), NULL);
 
-  sec = difftime(now, (*r)->last_pack);
+  gettimeofday(&now, NULL);
+  sec = (now.tv_sec - (*r)->last_pack.tv_sec);
 
-  if (sec > 1)
+  if (sec >= 1)
   {
     (*r)->transf_last_sec = 0;
-    (*r)->last_pack = time(NULL);
+    gettimeofday(&((*r)->last_pack), NULL);
   }
 }

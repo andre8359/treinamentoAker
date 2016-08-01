@@ -24,7 +24,7 @@
 #define KILOBYTE 1024
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
-#define BUFSIZE  MEGABYTE
+#define BUFSIZE 8*KILOBYTE
 int create_socket(const struct sockaddr_in *p);
 void config_connection(const long port, struct sockaddr_in *serv_info);
 int make_connection(const long port);
