@@ -98,9 +98,8 @@ int main(int argc,  char *argv[])
           FD_CLR(i, &active_write_fd_set);
         }
     }
-    if (head && ((time_out.tv_sec - head->last_pack.tv_sec) < 1
-                 && ((head->transf_last_sec + (BUFSIZE/div_factor))
-                 > speed_limit)))
+    gettimeofday(&time_waiting, NULL);
+    if (head && (head->transf_last_sec + (BUFSIZE/div_factor)) > speed_limit)
       usleep(1e6 - (time_waiting.tv_usec - head->last_pack.tv_usec));
     time_out.tv_sec = 1;
     time_out.tv_usec = 0;

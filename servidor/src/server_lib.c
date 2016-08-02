@@ -422,8 +422,8 @@ on_error:
           "Linha de comando incompleta :\n",
           "\t\t ./prog -p <PORTA> -d <DIRETORIO> -l <limite de velocidade>\n\n",
           "Lembre que caso o valor da porta seja menor que 1023 ",
-          " o programa necessitara de permissoes de super usuario. ",
-          "Range de portas 1-65535.\nO limite de velocidatde e dado em bytes/s\n");
+          " o programa necessitara de permissoes de super usuario. Range de ",
+          "portas 1-65535.\nO limite de velocidatde e dado em bytes/s\n");
   return ERROR;
 }
 /*!
