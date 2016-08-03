@@ -15,8 +15,10 @@
 int create_socket(const struct sockaddr_in *p)
 {
   int socket_id = 0;
+
   if ((socket_id = socket(p->sin_family, SOCK_STREAM, 0)) == -1)
     return ERROR;
+
   return socket_id;
 }
 /*!
