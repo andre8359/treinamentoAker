@@ -17,6 +17,7 @@ struct request_file
   long header_size_sended, file_size, sended_size, transf_last_sec;
   int socket_id, status_request;
   struct timeval last_pack;
+  int request_method;
   struct request_file *prev, *next;
 };
 struct request_file* add_request(const int socket_id,
