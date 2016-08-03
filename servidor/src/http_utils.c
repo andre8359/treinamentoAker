@@ -1,16 +1,30 @@
+/*!
+ * \file   server_lib.c
+ * \brief  Arquivo de implementação das funcoes para o recupe
+ * \date 18/07/2016
+ * \author Andre Dantas <andre.dantas@aker.com.br>
+ */
 #include "http_utils.h"
-const char *status_conection [] =
-{ "HTTP/1.0 200 OK\r\n",
+
+const char *status_conection [] = {
+  "HTTP/1.0 200 OK\r\n",
+  "HTTP/1.0 201 Created\r\n",
   "HTTP/1.0 400 Bad Request\r\n",
   "HTTP/1.0 401 Unauthorized\r\n",
   "HTTP/1.0 403 Forbidden\r\n",
   "HTTP/1.0 404 Not Found\r\n",
-  "HTTP/1.0 413 Request Entity Too Large\r\n",
   "HTTP/1.0 500 Internal Server Error\r\n",
   "HTTP/1.0 503 Service Unavailable\r\n"
 };
-const char *messages_status [] =
-{ "",
+
+const char *messages_status [] ={
+  "",
+  "<html>\n"
+    " <body>\n"
+    "  <h1>Created</h1>\n"
+    "  <p>O arquivo foi criado com sucesso!</p>\n"
+    " </body>\n"
+    "</html>\n",
   "<html>\n"
     " <body>\n"
     "  <h1>Bad Request</h1>\n"
@@ -25,70 +39,113 @@ const char *messages_status [] =
     "  <p>A URL requisitada nao pode ser encontrada nesse servidor.</p>\n"
     " </body>\n"
     "</html>\n",
-  "<h1> 413 - Request Entity Too Large</h1>",
   "<h1> 500 - Internal Server Error</h1>",
   "<h1> 503 - Service Unavailable</h1>"
 };
-const char  *std_response_file_names[] =
-{ "bad_request.html",
+const char  *std_response_file_names[] = {
+  "",
+  "created.html",
+  "bad_request.html",
   "unauthorized.html",
   "forbidden.html",
   "not_found.html",
-  "request_too_large.html",
   "internal_error.html",
   "service_unavailable.html",
 };
+/*!
+ * \brief Encontra fim de requisicao.
+ * \param[in] request String que representa a requisicao.
+ *  do socket.
+ * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
+ *  falha.
+ */
 int find_end_request(char *request)
 {
-  const int found = 0;
   if ((strstr(request, "\r\n\r\n")) != NULL)
-    return found;
+    return SUCCESS;
   else if ((strstr(request,"\n\n")) != NULL)
-    return found;
+    return SUCCESS;
   else if ((strstr(request,"\n\r\n\r")) != NULL)
-    return found;
+    return SUCCESS;
   else
-    return -1;
+    return ERROR;
 }
-
-char *get_resquest_info(struct request_file *request)
+/*!
+ * \brief Le o valor do content length enviado em uma requisicao.
+ * \param[in]  p Estrutura que contem as informacoes sobre a requisicao.
+ * \return Retona o valor encontrado ou -1 em caso de falha.
+ */
+static long get_content_length(struct request_file *request)
 {
-  char *file_name = NULL, temp[PATH_MAX];
+  char *ch = NULL , *end = NULL;
+  const int base = 10;
+  long file_length = 0;
+  ch = strstr(request->request, "Content-Length:");
+  if (ch == NULL)
+    return ERROR;
+  ch += strlen("Content-Length: ");
+
+  errno = 0;
+
+  file_length = strtol(ch, &end, base);
+
+  if (errno == ERANGE && (file_length == LONG_MAX || file_length == LONG_MIN
+                          || file_length <= 0))
+    return ERROR;
+  return file_length;
+}
+/*!
+ * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
+ * PUT -> nome e tamanho do arquivo requisitado.
+ * \param p Estrutura que contem as informacoes sobre a requisicao.
+ * \return Retona 0 em caso de suceso ou -1 em caso de falha.
+ */
+int get_resquest_info(struct request_file *request)
+{
+  long content_length = 0;  char temp[PATH_MAX];
   const int command_len = 5, http_version_len = 10;
   char command[command_len], http_version[http_version_len];
-
+  int ret = 0;
+  
   sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, temp,
          http_version);
-
-  if (strncmp(command,"GET", 3))
-    request->status_request = BAD_REQUEST;
-  else if ((strncmp(http_version,"HTTP/1.0",8))
-           && (strncmp(http_version,"HTTP/1.1",8)))
-    request->status_request = BAD_REQUEST;
-  else if (strlen(temp) == 1 && *temp == '.')
-    request->status_request = BAD_REQUEST;
-  else if (strlen(temp) == 2 && !strncmp(temp,"..",2))
-    request->status_request = BAD_REQUEST;
-
-  if (request->status_request == BAD_REQUEST)
+  
+  if (!strncmp(command, "GET",4))
+    continue;
+  else if (!strncmp(command,"PUT",4))
   {
-    set_std_response(request);
-    return NULL;
+    content_length = get_content_length(request);
+    if (content_length < 0)
+      goto on_error;
+    request->file_length = content_length;
   }
+  else 
+    goto on_error;
 
-  if (strlen (temp) == 1 && (*temp == '/'))
-    file_name = strdup("index.html");
-  else if (*temp == '/')
-    file_name = strdup(temp + 1);
+  if (!strncmp(temp,"..",3))
+    goto on_error;
+  else if (*temp != '/')
+    goto on_error;
+  if (!strncmp(temp, '/', 2) || !strncmp(temp,"/.",3))
+    request->file_name = strdup("index.html");
   else
-    file_name = strdup(temp);
+    request->file_name = strdup(temp + 1); 
 
-  return file_name;
+  return SUCCESS;
+
+on_error:
+  request->status_request = BAD_REQUEST;
+  set_std_response(request);
 }
+/*!
+ * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad 
+ *  Request, Not Foud, etc).
+ * \param p Estrutura que contem as informacoes sobre a requisicao.
+ * \return Retona 0 em caso de suceso ou -1 em caso de falha.
+ */
 int set_std_response(struct request_file *r)
 {
   struct stat st;
-
   free(r->file_name);
   r->file_name = strdup(std_response_file_names[r->status_request - 1]);
 
@@ -98,11 +155,11 @@ int set_std_response(struct request_file *r)
   else
   {
     r->file_size = 0;
-    return -1;
+    return ERROR;
   }
-  return 0;
+  return SUCCESS;
 }
-static char *get_content_type(const char *file_name)
+static char *set_content_type(const char *file_name)
 {
   const char *type[] =
   { "application/octet-stream",
@@ -136,7 +193,7 @@ static char *get_content_type(const char *file_name)
   snprintf(content_type,content_type_len,"Content-Type: %s \r\n", type[pos]);
   return content_type;
 }
-static char *get_content_length(const char *file_name, long *file_size){
+static char *set_content_length(const char *file_name, long *file_size){
   struct stat st;
   const int length_value = 12; /*Terabytes 2^12*/
   const int content_len_size = strlen( "Content-Length: \r\n") + length_value;
@@ -160,7 +217,7 @@ static char *get_content_length(const char *file_name, long *file_size){
 static char *get_date()
 {
   const char *weekday[] = { "Sun", "Mon", "Tue", "Thu", "Fri", "Sat"};
-  const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
+  const char *months[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
     "Aug", "Sep", "Oct", "Nov", "Dec"};
   const int date_length = strlen("Date : Mon, 25 Jul 2016 15:11:59 GMT\r\n");
   char *date = (char *) malloc (date_length * sizeof(char));
@@ -180,18 +237,18 @@ char *make_header(const char *file_name, const int status,
 {
   const char server[] = "Server: Cacique/1.0\r\n";
   const int end_header_len = 2;
-  char *content_length = get_content_length(file_name, file_size);
+  char *content_length = set_content_length(file_name, file_size);
   char *date = get_date();
-  char *content_type = get_content_type(file_name);
+  char *content_type = set_content_type(file_name);
   char connection_status[] = "Connection: Close\r\n";
   int header_size = strlen(status_conection[status]) + strlen(content_type)+1
-                           + strlen(content_length)+1  + strlen(date)+ 1
-                           + strlen(server)+ 1 + end_header_len
-                           + strlen(connection_status);
+    + strlen(content_length) + 1  + strlen(date) + 1
+    + strlen(server)+ 1 + end_header_len
+    + strlen(connection_status);
 
   char *header = (char *) malloc (header_size * sizeof(char));
 
- snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status],
+  snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status-1],
            content_type, content_length,connection_status,date,server);
 
   free(content_length);
@@ -205,15 +262,15 @@ int create_default_response_files()
 
   FILE *fp = NULL;
   int i;
-  for(i = BAD_REQUEST; i <= SERVICE_UNAVAILABLE; i++)
+  for (i = CREATED; i <= SERVICE_UNAVAILABLE; i++)
   {
     fp = fopen(std_response_file_names[i-1], "w");
     if (fp == NULL)
-      return -1;
+      return ERROR;
 
-   fwrite(messages_status[i],sizeof(char), strlen(messages_status[i]), fp);
+    fwrite(messages_status[i-1], sizeof(char), strlen(messages_status[i-1]), fp);
     fclose(fp);
   }
 
-  return 0;
+  return SUCCESS;
 }

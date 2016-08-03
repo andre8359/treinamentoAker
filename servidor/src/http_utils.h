@@ -5,18 +5,22 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <limits.h>
 #include "request_lib.h"
-#define OK 0
-#define BAD_REQUEST 1
-#define UNAUTHORIZED 2
-#define FORBIDDEN 3
-#define NOT_FOUND 4
-#define REQUEST_TOO_LARGE 5
-#define INTERNAL_ERROR 6
-#define SERVICE_UNAVAILABLE 7
+#include <errno.h>
 #define MAX_HEADER_SIZE 4000
+enum status_conection {
+  OK = 1,
+  CREATED,
+  BAD_REQUEST,
+  UNAUTHORIZED,
+  FORBIDDEN,
+  NOT_FOUND,
+  INTERNAL_ERROR,
+  SERVICE_UNAVAILABLE
+};
 int find_end_request(char *header);
-char *get_resquest_info(struct request_file *request);
+int get_resquest_info(struct request_file *request);
 char *make_header(const char *file_name, const int status,
                   long *file_size);
 int create_default_response_files();
