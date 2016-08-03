@@ -26,10 +26,10 @@ struct request_file* add_request(const int socket_id,
     return *head;
   }
   temp = *head;
-  while(temp->next)
+  while (temp->next)
     temp = temp->next;
-  struct request_file *new_request = (struct request_file *) malloc
-    (sizeof(struct request_file));
+  struct request_file *new_request =
+    (struct request_file *) malloc(sizeof(struct request_file));
   memset(new_request, 0, sizeof(*new_request));
   new_request->socket_id = socket_id;
   new_request->prev = temp;
@@ -132,7 +132,7 @@ void free_request_list(struct request_file **head)
 {
   struct request_file *i, *j = NULL;
   i = *head;
-  while(i)
+  while (i)
   {
     j = i->next;
     free_request_file(&i);
