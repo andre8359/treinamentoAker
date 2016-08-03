@@ -94,6 +94,21 @@ static long get_content_length(struct request_file *request)
     return ERROR;
   return file_length;
 }
+static char *get_file_name(char *input_path)
+{
+  char *ret = NULL 
+
+  if (!strncmp(temp,"..",3))
+    return ret;
+  else if (*temp != '/')
+    return ret;
+  if (!strncmp(temp, '/', 2) || !strncmp(temp,"/.",3))
+    ret = strdup("index.html");
+  else
+    ret = strdup(temp + 1);
+  
+  return ret;
+}
 /*!
  * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
  * PUT -> nome e tamanho do arquivo requisitado.
@@ -121,15 +136,9 @@ int get_resquest_info(struct request_file *request)
   }
   else 
     goto on_error;
-
-  if (!strncmp(temp,"..",3))
+  request->file_name = get_file_name(temp);
+  if (request->file_name == NULL)
     goto on_error;
-  else if (*temp != '/')
-    goto on_error;
-  if (!strncmp(temp, '/', 2) || !strncmp(temp,"/.",3))
-    request->file_name = strdup("index.html");
-  else
-    request->file_name = strdup(temp + 1); 
 
   return SUCCESS;
 
