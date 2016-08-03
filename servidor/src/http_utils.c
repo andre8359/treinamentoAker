@@ -96,16 +96,16 @@ static long get_content_length(struct request_file *request)
 }
 static char *get_file_name(char *input_path)
 {
-  char *ret = NULL 
+  char *ret = NULL; 
 
-  if (!strncmp(temp,"..",3))
+  if (!strncmp(input_path,"..",3))
     return ret;
-  else if (*temp != '/')
+  else if (*input_path != '/')
     return ret;
-  if (!strncmp(temp, '/', 2) || !strncmp(temp,"/.",3))
+  if (!strncmp(input_path, "/", 2) || !strncmp(input_path,"/.",3))
     ret = strdup("index.html");
   else
-    ret = strdup(temp + 1);
+    ret = strdup(input_path + 1);
   
   return ret;
 }
@@ -120,19 +120,18 @@ int get_resquest_info(struct request_file *request)
   long content_length = 0;  char temp[PATH_MAX];
   const int command_len = 5, http_version_len = 10;
   char command[command_len], http_version[http_version_len];
-  int ret = 0;
   
   sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, temp,
          http_version);
   
   if (!strncmp(command, "GET",4))
-    continue;
+   ;
   else if (!strncmp(command,"PUT",4))
   {
     content_length = get_content_length(request);
     if (content_length < 0)
       goto on_error;
-    request->file_length = content_length;
+    request->file_size = content_length;
   }
   else 
     goto on_error;
@@ -145,6 +144,7 @@ int get_resquest_info(struct request_file *request)
 on_error:
   request->status_request = BAD_REQUEST;
   set_std_response(request);
+  return ERROR;
 }
 /*!
  * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad 
