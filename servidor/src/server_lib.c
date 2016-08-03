@@ -131,11 +131,11 @@ int receive_request_from_client(const int socket_id, struct request_file **head,
 
   if (!find_end_request(request->request))
   {
-    request->file_name = get_resquest_info(request);
+     get_resquest_info(request);
 
-    if (request->file_name == NULL || check_file_ready_to_send(request) < 0)
-      set_std_response(request);
-
+     if (request->status_request == OK)
+       check_file_ready_to_send(request);
+      
     return SUCCESS;
   }
 
@@ -227,7 +227,7 @@ int send_to_client (const int socket_id, struct request_file **head,
 }
 /*!
  * \brief Change the current working directoy
- * \param[in] root_diretory Diretorio que sera considera a raiz do servidor.
+ * \param[in] root_directory Diretorio que sera considera a raiz do servidor.
  * \return Retorna 0 caso tenha mudado com sucesso ou -1 caso nao.
  */
 int change_root_directory(const char *root_directory)
@@ -247,7 +247,7 @@ int change_root_directory(const char *root_directory)
  */
 int check_file_ready_to_send(struct request_file * request)
 {
-  char root_diretory[PATH_MAX];
+  char root_directory[PATH_MAX];
   char abs_path[PATH_MAX];
 
   if (request->file_name == NULL)
@@ -255,23 +255,25 @@ int check_file_ready_to_send(struct request_file * request)
 
   if (access(request->file_name, F_OK) != -1)
   {
-    getcwd(root_diretory,PATH_MAX);
+    getcwd(root_directory,PATH_MAX);
     realpath(request->file_name, abs_path);
-    if (strstr(abs_path, root_diretory) == NULL)
+    if (strstr(abs_path, root_directory) == NULL)
     {
       request->status_request = FORBIDDEN;
-      return ERROR;
+      goto on_error;
     }
     else if (access(request->file_name, R_OK) < 0)
     {
       request->status_request = UNAUTHORIZED;
-      return ERROR;
+      goto on_error;
     }
 
     return SUCCESS;
   }
 
   request->status_request = NOT_FOUND;
+on_error: 
+ set_std_response(request);
   return ERROR;
 }
 /*!
@@ -377,15 +379,15 @@ on_error:
  */
 long params_is_valid(int argc , char *argv[], long *speed_limit)
 {
-  char *port = NULL, *root_diretory = NULL, *end = NULL, *sp_limit = NULL;
+  char *port = NULL, *root_directory = NULL, *end = NULL, *sp_limit = NULL;
   long port_int = 0;
   const int base = 10, port_range_max = 65535;
-  int ret = get_param(argc, argv, &port, &root_diretory, &sp_limit);
+  int ret = get_param(argc, argv, &port, &root_directory, &sp_limit);
 
   if ( ret < 0)
     goto on_error;
 
-  if (port == NULL || root_diretory == NULL)
+  if (port == NULL || root_directory == NULL)
     goto on_error;
 
   errno = 0;
@@ -404,15 +406,15 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
 
     *speed_limit = strtol(sp_limit, &end, base);
 
-    if ((errno == ERANGE && (*speed_limit == LONG_MAX ||
-                             *speed_limit == LONG_MIN))||
-                             (*speed_limit <= 0))
+    if ((errno == ERANGE && (*speed_limit == LONG_MAX 
+                             || *speed_limit == LONG_MIN)) 
+                             || (*speed_limit <= 0))
       goto on_error;
 
   }
-  if (change_root_directory(root_diretory) < 0)
+  if (change_root_directory(root_directory) < 0)
   {
-    fprintf(stderr, "Nao foi possivel definir esse diretorio como raiz!\n");
+    fprintf(stderr, "\n\nNao foi possivel definir esse diretorio como raiz!\n");
     goto on_error;
   }
   return port_int;
