@@ -67,13 +67,14 @@ int find_end_request(char *request)
     return SUCCESS;
   else if ((strstr(request,"\n\r\n\r")) != NULL)
     return SUCCESS;
-  else
-    return ERROR;
+
+  return ERROR;
 }
 /*!
  * \brief Le o valor do content length enviado em uma requisicao.
  * \param[in]  p Estrutura que contem as informacoes sobre a requisicao.
- * \return Retona o valor encontrado ou -1 em caso de falha.
+ * \return Retona o valor encontrado.
+ * \return ERROR  Em caso de falha.
  */
 static long get_content_length(struct request_file *request)
 {
@@ -96,7 +97,7 @@ static long get_content_length(struct request_file *request)
 }
 static char *get_file_name(char *input_path)
 {
-  char *ret = NULL; 
+  char *ret = NULL;
 
   if (!strncmp(input_path,"..",3))
     return ret;
@@ -106,7 +107,7 @@ static char *get_file_name(char *input_path)
     ret = strdup("index.html");
   else
     ret = strdup(input_path + 1);
-  
+
   return ret;
 }
 /*!
@@ -115,37 +116,47 @@ static char *get_file_name(char *input_path)
  * \param p Estrutura que contem as informacoes sobre a requisicao.
  * \return Retona 0 em caso de suceso ou -1 em caso de falha.
  */
-int get_resquest_info(struct request_file *request)
+static void get_resquest_info(struct request_file *request)
 {
-  long content_length = 0;  char temp[PATH_MAX];
+  char file_path[PATH_MAX];
   const int command_len = 5, http_version_len = 10;
   char command[command_len], http_version[http_version_len];
-  
-  sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, temp,
+
+  sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, file_path,
          http_version);
-  
+
   if (!strncmp(command, "GET",4))
-   ;
+    request->method  = GET;
   else if (!strncmp(command,"PUT",4))
   {
-    content_length = get_content_length(request);
-    if (content_length < 0)
-      goto on_error;
-    request->file_size = content_length;
+    request->file_size = get_content_length(request);
+    request->method  = PUT;
   }
-  else 
+
+  request->file_name = get_file_name(file_path);
+}
+
+void check_request_info(struct request_file *request)
+{
+  get_resquest_info(request);
+
+  if (request->method < GET && request->method > LAST_METHOD)
     goto on_error;
-  request->file_name = get_file_name(temp);
+
   if (request->file_name == NULL)
     goto on_error;
 
-  return SUCCESS;
+  if (request->file_size < 0)
+    goto on_error;
+
+  request->status = OK;
+  return;
 
 on_error:
-  request->status_request = BAD_REQUEST;
-  set_std_response(request);
-  return ERROR;
+ request->status = BAD_REQUEST;
+ set_std_response(request);
 }
+
 /*!
  * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad 
  *  Request, Not Foud, etc).
@@ -156,7 +167,7 @@ int set_std_response(struct request_file *r)
 {
   struct stat st;
   free(r->file_name);
-  r->file_name = strdup(std_response_file_names[r->status_request - 1]);
+  r->file_name = strdup(std_response_file_names[r->status  - 1]);
 
   stat(r->file_name, &st);
   if (st.st_size > 0)
@@ -168,6 +179,7 @@ int set_std_response(struct request_file *r)
   }
   return SUCCESS;
 }
+
 static char *set_content_type(const char *file_name)
 {
   const char *type[] =
@@ -197,9 +209,11 @@ static char *set_content_type(const char *file_name)
     pos = 4;
   else
     pos = 0;
+
   content_type_len = strlen("Content-Type:  \r\n ") + strlen(type[pos]) + 1;
   content_type = (char *) malloc(content_type_len * sizeof(char));
   snprintf(content_type,content_type_len,"Content-Type: %s \r\n", type[pos]);
+
   return content_type;
 }
 static char *set_content_length(const char *file_name, long *file_size){
@@ -250,10 +264,13 @@ char *make_header(const char *file_name, const int status,
   char *date = get_date();
   char *content_type = set_content_type(file_name);
   char connection_status[] = "Connection: Close\r\n";
-  int header_size = strlen(status_conection[status]) + strlen(content_type)+1
-    + strlen(content_length) + 1  + strlen(date) + 1
-    + strlen(server)+ 1 + end_header_len
-    + strlen(connection_status);
+  int header_size = strlen(status_conection[status])
+                    + strlen(content_type)+1
+                    + strlen(content_length) + 1
+                    + strlen(date) + 1
+                    + strlen(server)+ 1
+                    + end_header_len
+                    + strlen(connection_status);
 
   char *header = (char *) malloc (header_size * sizeof(char));
 
@@ -268,16 +285,15 @@ char *make_header(const char *file_name, const int status,
 }
 int create_default_response_files()
 {
-
   FILE *fp = NULL;
   int i;
-  for (i = CREATED; i <= SERVICE_UNAVAILABLE; i++)
+  for (i = CREATED; i < LAST_STATUS; i++)
   {
     fp = fopen(std_response_file_names[i-1], "w");
     if (fp == NULL)
       return ERROR;
 
-    fwrite(messages_status[i-1], sizeof(char), strlen(messages_status[i-1]), fp);
+    fwrite(messages_status[i-1],sizeof(char),strlen(messages_status[i-1]),fp);
     fclose(fp);
   }
 
