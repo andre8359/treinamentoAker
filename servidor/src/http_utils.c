@@ -116,7 +116,7 @@ static char *get_file_name(char *input_path)
  * \param p Estrutura que contem as informacoes sobre a requisicao.
  * \return Retona 0 em caso de suceso ou -1 em caso de falha.
  */
-static void get_resquest_info(struct request_file *request)
+static void get_request_info(struct request_file *request)
 {
   char file_path[PATH_MAX];
   const int command_len = 5, http_version_len = 10;
@@ -138,7 +138,7 @@ static void get_resquest_info(struct request_file *request)
 
 void check_request_info(struct request_file *request)
 {
-  get_resquest_info(request);
+  get_request_info(request);
 
   if (request->method < GET && request->method > LAST_METHOD)
     goto on_error;
