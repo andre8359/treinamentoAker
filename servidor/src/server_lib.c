@@ -68,13 +68,16 @@ int accept_new_connection(const int socket_id)
   int new_socket_id;
 
   client_len = sizeof (client_info);
-  new_socket_id = accept (socket_id,(struct sockaddr *) &client_info,
+  new_socket_id = accept (socket_id,
+                          (struct sockaddr *)&client_info,
                           &client_len);
   if (new_socket_id < 0)
     return ERROR;
 
   fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",
-           inet_ntoa (client_info.sin_addr), ntohs (client_info.sin_port));
+           inet_ntoa(client_info.sin_addr),
+           ntohs(client_info.sin_port));
+
   return new_socket_id;
 }
 /*!
@@ -133,11 +136,11 @@ int receive_request_from_client(const int socket_id, struct request_file **head,
 
   if (!find_end_request(request->request))
   {
-     get_resquest_info(request);
+     check_request_info(request);
 
-     if (request->status_request == OK)
+     if (request->status == OK)
        check_file_ready_to_send(request);
-      
+
     return SUCCESS;
   }
 
@@ -149,28 +152,34 @@ int receive_request_from_client(const int socket_id, struct request_file **head,
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-static int send_header_to_client(struct request_file **r, long buf_size,
-                                 long div_factor)
+static int send_header_to_client( struct request_file **r,
+                                  long buf_size,
+                                  long div_factor)
 {
+  const int local_buf_size = BUFSIZE/div_factor;
   int send_size = 0, nbytes = 0;
   struct request_file *request = *r;
 
   if (request->header == NULL)
-    request->header = make_header(request->file_name, request->status_request,
-                                  &(request->file_size));
+    request->header = make_header( request->file_name,
+                                   request->status,
+                                   &(request->file_size));
 
   if ((unsigned)request->header_size_sended >= strlen(request->header))
     return SUCCESS;
 
   send_size = strlen(request->header) - request->header_size_sended;
 
-  if (send_size > (BUFSIZE/div_factor))
-    send_size = (BUFSIZE/div_factor);
+  if (send_size > local_buf_size)
+    send_size = local_buf_size;
 
   if ((request->transf_last_sec + send_size) < buf_size)
   {
-    nbytes = send(request->socket_id, request->header
-                  + request->header_size_sended, send_size, MSG_NOSIGNAL);
+    nbytes = send( request->socket_id,
+                   request->header + request->header_size_sended,
+                   send_size,
+                   MSG_NOSIGNAL);
+
     if (nbytes <= 0)
       return SUCCESS;
 
@@ -189,9 +198,10 @@ static int send_header_to_client(struct request_file **r, long buf_size,
 int send_to_client (const int socket_id, struct request_file **head,
                     long buf_size, long div_factor)
 {
+  const int local_buf_size = BUFSIZE/div_factor;
   int nbytes = 0;
   struct request_file *request = NULL;
-  char bufin[BUFSIZE/div_factor];
+  char bufin[local_buf_size];
   request =  search_request(socket_id, head);
 
   if (request == NULL)
@@ -203,7 +213,8 @@ int send_to_client (const int socket_id, struct request_file **head,
   if (request->sended_size >= request->file_size)
     return SUCCESS;
 
-  memset(bufin, 0, BUFSIZE/div_factor);
+  memset(bufin, 0,strlen(bufin));
+
   if(request->fp == NULL)
   {
     request->fp = fopen(request->file_name,"r");
@@ -214,13 +225,15 @@ int send_to_client (const int socket_id, struct request_file **head,
 
   calc_if_sec_had_pass(&request);
 
-  if ((request->transf_last_sec) + (BUFSIZE/div_factor) > buf_size)
+  if ((request->transf_last_sec + strlen(bufin)) > (unsigned) buf_size)
     return ERROR;
 
-  nbytes = fread(bufin, 1, (BUFSIZE/div_factor),request->fp);
+  nbytes = fread(bufin, 1, local_buf_size,request->fp);
   nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
+
   if (nbytes <= 0 )
     return SUCCESS;
+
   request->sended_size += nbytes;
   request->transf_last_sec += nbytes;
   return ERROR;
@@ -251,30 +264,36 @@ int check_file_ready_to_send(struct request_file * request)
 {
   char root_directory[PATH_MAX];
   char abs_path[PATH_MAX];
-
+  struct stat path_stat;
   if (request->file_name == NULL)
     return ERROR;
 
   if (access(request->file_name, F_OK) != -1)
   {
+    stat(request->file_name, &path_stat);
+    if (S_ISDIR(path_stat.st_mode))
+    {
+      request->status = BAD_REQUEST;
+      goto on_error;
+    }
     getcwd(root_directory,PATH_MAX);
     realpath(request->file_name, abs_path);
     if (strstr(abs_path, root_directory) == NULL)
     {
-      request->status_request = FORBIDDEN;
+      request->status = FORBIDDEN;
       goto on_error;
     }
     else if (access(request->file_name, R_OK) < 0)
     {
-      request->status_request = UNAUTHORIZED;
+      request->status = UNAUTHORIZED;
       goto on_error;
     }
 
     return SUCCESS;
   }
 
-  request->status_request = NOT_FOUND;
-on_error: 
+  request->status = NOT_FOUND;
+on_error:
  set_std_response(request);
   return ERROR;
 }
@@ -330,7 +349,7 @@ int min(const int a , const int b)
  * \param[in]  argc Numero de parametros passados na linha de comando.
  * \param[in]  argv Lista de parametros passados na linha de comando.
  * \param[out] port String com informacao sobre a porta da conexao.
- * \param[out] root_directory Diretorio que sera considerado a raiz do servidor.
+ * \param[out] root_directory Diretorio que sera considerado raiz do servidor.
  * \return  0 em caso de parametros validos -1 caso parametros.
  */
 static int get_param(int argc, char *argv[], char **port,char **root_directory,

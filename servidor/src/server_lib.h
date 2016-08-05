@@ -30,8 +30,11 @@ void config_connection(const long port, struct sockaddr_in *serv_info);
 int make_connection(const long port);
 int accept_new_connection(const int socket_id);
 void vector_cpy(char *dst, const char *src, const int begin, const int length);
-int receive_request_from_client(const int socket_id, struct request_file **head,                                long buf_size, long div_factor);
-int send_to_client(const int socket_id, struct request_file **head,
+int receive_request_from_client( const int socket_id,
+                                 struct request_file **head,
+                                 long buf_size, long div_factor);
+int send_to_client(const int socket_id,
+                   struct request_file **head,
                    long buf_size, long div_factor);
 int change_root_directory(const char *root_directory);
 int check_file_ready_to_send(struct request_file * request);
