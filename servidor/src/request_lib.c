@@ -34,6 +34,7 @@ struct request_file* add_request(const int socket_id,
   new_request->socket_id = socket_id;
   new_request->prev = temp;
   temp->next = new_request;
+
   return new_request;
 }
 /*!
@@ -97,7 +98,7 @@ int rm_request(const int socket_id, struct request_file **head)
 
   if (swap_request_next != NULL)
     swap_request_next->prev = swap_request_prev;
-
+  free_request_file(&deleted_request);
   return SUCCESS;
 }
 /*!
