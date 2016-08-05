@@ -6,6 +6,7 @@
  */
 #include "http_utils.h"
 
+/* Resposta padrao */
 const char *status_conection [] = {
   "HTTP/1.0 200 OK\r\n",
   "HTTP/1.0 201 Created\r\n",
@@ -17,6 +18,7 @@ const char *status_conection [] = {
   "HTTP/1.0 503 Service Unavailable\r\n"
 };
 
+/* Mensagens de respota padrao*/
 const char *messages_status [] ={
   "",
   "<html>\n"
@@ -42,6 +44,8 @@ const char *messages_status [] ={
   "<h1> 500 - Internal Server Error</h1>",
   "<h1> 503 - Service Unavailable</h1>"
 };
+
+/*Nomes do arquivos com html das respostas padao.*/
 const char  *std_response_file_names[] = {
   "",
   "created.html",
@@ -52,6 +56,13 @@ const char  *std_response_file_names[] = {
   "internal_error.html",
   "service_unavailable.html",
 };
+/* Headers das funcoes estaticas */
+static long get_content_length(struct request_file *request);
+static char *get_file_name(char *input_path);
+static void get_request_info(struct request_file *request);
+static char *set_content_type(const char *file_name);
+static char *set_content_length(const char *file_name, long *file_size);
+static char *get_date();
 /*!
  * \brief Encontra fim de requisicao.
  * \param[in] request String que representa a requisicao.
@@ -70,6 +81,53 @@ int find_end_request(char *request)
 
   return ERROR;
 }
+
+void check_request_info(struct request_file *request)
+{
+  get_request_info(request);
+
+  if (request->method < GET && request->method > LAST_METHOD)
+    goto on_error;
+
+  if (request->file_name == NULL)
+    goto on_error;
+
+  if (request->file_size < 0)
+    goto on_error;
+
+  request->status = OK;
+  return;
+
+on_error:
+ request->status = BAD_REQUEST;
+ set_std_response(request);
+}
+/*!
+ * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
+ * PUT -> nome e tamanho do arquivo requisitado.
+ * \param p Estrutura que contem as informacoes sobre a requisicao.
+ * \return Retona 0 em caso de suceso ou -1 em caso de falha.
+ */
+static void get_request_info(struct request_file *request)
+{
+  char file_path[PATH_MAX];
+  const int command_len = 5, http_version_len = 10;
+  char command[command_len], http_version[http_version_len];
+
+  sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, file_path,
+         http_version);
+
+  if (!strncmp(command, "GET",4))
+    request->method  = GET;
+  else if (!strncmp(command,"PUT",4))
+  {
+    request->file_size = get_content_length(request);
+    request->method  = PUT;
+  }
+
+  request->file_name = get_file_name(file_path);
+}
+
 /*!
  * \brief Le o valor do content length enviado em uma requisicao.
  * \param[in]  p Estrutura que contem as informacoes sobre a requisicao.
@@ -111,53 +169,6 @@ static char *get_file_name(char *input_path)
   return ret;
 }
 /*!
- * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
- * PUT -> nome e tamanho do arquivo requisitado.
- * \param p Estrutura que contem as informacoes sobre a requisicao.
- * \return Retona 0 em caso de suceso ou -1 em caso de falha.
- */
-static void get_request_info(struct request_file *request)
-{
-  char file_path[PATH_MAX];
-  const int command_len = 5, http_version_len = 10;
-  char command[command_len], http_version[http_version_len];
-
-  sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, file_path,
-         http_version);
-
-  if (!strncmp(command, "GET",4))
-    request->method  = GET;
-  else if (!strncmp(command,"PUT",4))
-  {
-    request->file_size = get_content_length(request);
-    request->method  = PUT;
-  }
-
-  request->file_name = get_file_name(file_path);
-}
-
-void check_request_info(struct request_file *request)
-{
-  get_request_info(request);
-
-  if (request->method < GET && request->method > LAST_METHOD)
-    goto on_error;
-
-  if (request->file_name == NULL)
-    goto on_error;
-
-  if (request->file_size < 0)
-    goto on_error;
-
-  request->status = OK;
-  return;
-
-on_error:
- request->status = BAD_REQUEST;
- set_std_response(request);
-}
-
-/*!
  * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad 
  *  Request, Not Foud, etc).
  * \param p Estrutura que contem as informacoes sobre a requisicao.
@@ -179,7 +190,56 @@ int set_std_response(struct request_file *r)
   }
   return SUCCESS;
 }
+char *make_header(const char *file_name, const int status,
+                  long *file_size)
+{
+  const char server[] = "Server: Cacique/1.0\r\n";
+  const int end_header_len = 2;
+  char *content_length = set_content_length(file_name, file_size);
+  char *date = get_date();
+  char *content_type = set_content_type(file_name);
+  char connection_status[] = "Connection: Close\r\n";
+  int header_size = strlen(status_conection[status])
+                    + strlen(content_type)+1
+                    + strlen(content_length) + 1
+                    + strlen(date) + 1
+                    + strlen(server)+ 1
+                    + end_header_len
+                    + strlen(connection_status);
 
+  char *header = (char *) malloc (header_size * sizeof(char));
+
+  snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status-1],
+           content_type, content_length,connection_status,date,server);
+
+  free(content_length);
+  free(date);
+  free(content_type);
+
+  return header;
+}
+static char *set_content_length(const char *file_name, long *file_size)
+{
+  struct stat st;
+  const int length_value = 12; /*Terabytes 2^12*/
+  const int content_len_size = strlen( "Content-Length: \r\n") + length_value;
+  char *content_length = (char *) malloc (content_len_size * sizeof(char));
+  if (content_length == NULL)
+    return content_length;
+  stat(file_name, &st);
+  if (st.st_size < 0)
+  {
+    snprintf(content_length, content_len_size,"Content-Length: %d\r\n",0);
+    *file_size = 0;
+  }
+  else
+  {
+    snprintf(content_length, content_len_size,"Content-Length: %ld\r\n",
+             st.st_size);
+    *file_size = st.st_size;
+  }
+  return content_length;
+}
 static char *set_content_type(const char *file_name)
 {
   const char *type[] =
@@ -216,27 +276,6 @@ static char *set_content_type(const char *file_name)
 
   return content_type;
 }
-static char *set_content_length(const char *file_name, long *file_size){
-  struct stat st;
-  const int length_value = 12; /*Terabytes 2^12*/
-  const int content_len_size = strlen( "Content-Length: \r\n") + length_value;
-  char *content_length = (char *) malloc (content_len_size * sizeof(char));
-  if (content_length == NULL)
-    return content_length;
-  stat(file_name, &st);
-  if (st.st_size < 0)
-  {
-    snprintf(content_length, content_len_size,"Content-Length: %d\r\n",0);
-    *file_size = 0;
-  }
-  else
-  {
-    snprintf(content_length, content_len_size,"Content-Length: %ld\r\n",
-             st.st_size);
-    *file_size = st.st_size;
-  }
-  return content_length;
-}
 static char *get_date()
 {
   const char *weekday[] = { "Sun", "Mon", "Tue", "Thu", "Fri", "Sat"};
@@ -254,34 +293,6 @@ static char *get_date()
            weekday[local->tm_wday], local->tm_mday, months[local->tm_mon],
            local->tm_year+1900, local->tm_hour, local->tm_min, local->tm_sec);
   return date;
-}
-char *make_header(const char *file_name, const int status,
-                  long *file_size)
-{
-  const char server[] = "Server: Cacique/1.0\r\n";
-  const int end_header_len = 2;
-  char *content_length = set_content_length(file_name, file_size);
-  char *date = get_date();
-  char *content_type = set_content_type(file_name);
-  char connection_status[] = "Connection: Close\r\n";
-  int header_size = strlen(status_conection[status])
-                    + strlen(content_type)+1
-                    + strlen(content_length) + 1
-                    + strlen(date) + 1
-                    + strlen(server)+ 1
-                    + end_header_len
-                    + strlen(connection_status);
-
-  char *header = (char *) malloc (header_size * sizeof(char));
-
-  snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status-1],
-           content_type, content_length,connection_status,date,server);
-
-  free(content_length);
-  free(date);
-  free(content_type);
-
-  return header;
 }
 int create_default_response_files()
 {

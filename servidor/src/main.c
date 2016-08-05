@@ -60,6 +60,7 @@ int main(int argc,  char *argv[])
   max_socket = server_socket+1;
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
+
   while (end_prog)
   {
     read_fd_set = active_read_fd_set;

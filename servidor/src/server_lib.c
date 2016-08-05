@@ -101,8 +101,10 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int receive_request_from_client(const int socket_id, struct request_file **head,
-                                long buf_size, long div_factor)
+int receive_request_from_client(const int socket_id,
+                                struct request_file **head,
+                                long buf_size,
+                                long div_factor)
 {
   char bufin[BUFSIZE/div_factor + 1];
   int nbytes = 0, received_size = 0;
@@ -195,8 +197,10 @@ static int send_header_to_client( struct request_file **r,
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int send_to_client (const int socket_id, struct request_file **head,
-                    long buf_size, long div_factor)
+int send_to_client( const int socket_id,
+                    struct request_file **head,
+                    long buf_size,
+                    long div_factor)
 {
   const int local_buf_size = BUFSIZE/div_factor;
   int nbytes = 0;
@@ -213,7 +217,7 @@ int send_to_client (const int socket_id, struct request_file **head,
   if (request->sended_size >= request->file_size)
     return SUCCESS;
 
-  memset(bufin, 0,strlen(bufin));
+  memset(bufin, 0, local_buf_size);
 
   if(request->fp == NULL)
   {
