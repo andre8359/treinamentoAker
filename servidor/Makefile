@@ -15,11 +15,11 @@ endif
 
 LIBS=-lm
 
-_DEPS_C = server_lib.c request_lib.c http_utils.c
+_DEPS_C = server_lib.c request_lib.c http_utils.c socket_utils.c
 _DEPS = $(_DEPS_C) $(patsubst %.c,%.h,$(_DEPS_C))
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = main.o server_lib.o request_lib.o http_utils.o
+_OBJ = main.o $(patsubst %.c,%.o,$(_DEPS_C))
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 $(ODIR)/%.o: $(IDIR)/%.c $(DEPS)
 	$(CC) $(CFLAGS) -c -o $@ $<
