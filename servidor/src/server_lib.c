@@ -6,81 +6,6 @@
  */
 #include "server_lib.h"
 /*!
- * \brief Cria um socket.
- * \param[in]  p Estrutura que contem as informacoes necessarias para abertura
- *  do socket.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
- *  falha.
- */
-int create_socket(const struct sockaddr_in *p)
-{
-  int socket_id = 0;
-
-  if ((socket_id = socket(p->sin_family, SOCK_STREAM, 0)) == -1)
-    return ERROR;
-
-  return socket_id;
-}
-/*!
- * \brief Seta as informacoes necessarias para criar um socket.
- */
-void config_connection(const long port, struct sockaddr_in *serv_info)
-{
-  serv_info->sin_family = AF_INET;
-  serv_info->sin_addr.s_addr = INADDR_ANY;
-  serv_info->sin_port = htons(port);
-}
-/*!
- * \brief Cria socket e faz o bind com a porta especificada.
- * \param[in]  port  Inteiro que indica em qual porta a conexao acontecera.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
- *  falha.
- */
-int make_connection(const long port)
-{
-  struct sockaddr_in serv_info;
-  int socket_id = 0;
-  socklen_t len = 0;
-  memset(&serv_info, 0, sizeof(serv_info));
-  config_connection(port, &serv_info);
-  socket_id = create_socket(&serv_info);
-
-  if (socket_id < 0)
-    return ERROR;
-
-  len = sizeof(serv_info);
-
-  if (bind(socket_id, (struct sockaddr *) &serv_info, len) < 0)
-    return ERROR;
-
-  return socket_id;
-}
-/*!
- * \brief Aceita novas conexoes.
- * \param[in]  socket_id Descritor do socket onde ocoreu o bind.
- * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
- *  falha.
- */
-int accept_new_connection(const int socket_id)
-{
-  struct sockaddr_in client_info;
-  socklen_t client_len;
-  int new_socket_id;
-
-  client_len = sizeof (client_info);
-  new_socket_id = accept (socket_id,
-                          (struct sockaddr *)&client_info,
-                          &client_len);
-  if (new_socket_id < 0)
-    return ERROR;
-
-  fprintf (stderr, "Conexao aberta: conectado em host %s, porta %hd.\n",
-           inet_ntoa(client_info.sin_addr),
-           ntohs(client_info.sin_port));
-
-  return new_socket_id;
-}
-/*!
  * \brief Copia o vetor src no vertor dst
  * \param[out] dst Vetor modificado na copia.
  * \param[in] src Vetor que sera copiado.
@@ -103,10 +28,10 @@ void vector_cpy (char *dst, const char *src, const int begin, const int length)
  */
 int receive_request_from_client(const int socket_id,
                                 struct request_file **head,
-                                long buf_size,
-                                long div_factor)
+                                long speed_limit)
 {
-  char bufin[BUFSIZE/div_factor + 1];
+  const int bufin_size = calc_buf_size(speed_limit);
+  char bufin[bufin_size + 1];
   int nbytes = 0, received_size = 0;
   struct request_file *request = NULL;
 
@@ -115,13 +40,13 @@ int receive_request_from_client(const int socket_id,
   if (request == NULL)
     request = add_request(socket_id, head);
 
-  memset(bufin, 0, (BUFSIZE/div_factor) + 1);
+  memset(bufin, 0, bufin_size + 1);
 
   calc_if_sec_had_pass(&request);
 
-  if (request->transf_last_sec < buf_size)
+  if (request->transf_last_sec < speed_limit)
   {
-    nbytes = recv(socket_id, bufin, BUFSIZE/div_factor, 0);
+    nbytes = recv(socket_id, bufin, bufin_size, 0);
     request->transf_last_sec += nbytes;
   }
   else
@@ -142,11 +67,36 @@ int receive_request_from_client(const int socket_id,
 
      if (request->status == OK)
        check_file_ready_to_send(request);
-
-    return SUCCESS;
+    
+    if (request->method == GET)
+      return READY_TO_SEND;
+    return READY_TO_RECEIVE;
   }
 
   return ERROR;
+}
+int receive_file_from_client(struct request_file *request, long speed_limit)
+{
+  int bufin_size = calc_buf_size(speed_limit);
+  char bufin[BUFSIZE];
+  int nbytes = 0;
+  
+  if (request->transferred_size  >= request->file_size)
+    return SUCCESS;
+  
+  if (request->transf_last_sec < speed_limit)
+  {
+    nbytes = recv(request->socket_id, bufin, bufin_size, 0);
+    
+    if (nbytes <= 0)
+      return SUCCESS;
+
+    request->header_size_sended += nbytes;
+    return ERROR;
+  }
+
+  return SUCCESS;
+
 }
 /*!
  * \brief Envia header pro cliente conectado.
@@ -155,10 +105,9 @@ int receive_request_from_client(const int socket_id,
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
 static int send_header_to_client( struct request_file **r,
-                                  long buf_size,
-                                  long div_factor)
+                                  long speed_limit)
 {
-  const int local_buf_size = BUFSIZE/div_factor;
+  const int bufin_size = calc_buf_size(speed_limit);
   int send_size = 0, nbytes = 0;
   struct request_file *request = *r;
 
@@ -172,10 +121,10 @@ static int send_header_to_client( struct request_file **r,
 
   send_size = strlen(request->header) - request->header_size_sended;
 
-  if (send_size > local_buf_size)
-    send_size = local_buf_size;
+  if (send_size > bufin_size)
+    send_size =  bufin_size;
 
-  if ((request->transf_last_sec + send_size) < buf_size)
+  if ((request->transf_last_sec + send_size) < speed_limit)
   {
     nbytes = send( request->socket_id,
                    request->header + request->header_size_sended,
@@ -199,25 +148,24 @@ static int send_header_to_client( struct request_file **r,
  */
 int send_to_client( const int socket_id,
                     struct request_file **head,
-                    long buf_size,
-                    long div_factor)
+                    long speed_limit)
 {
-  const int local_buf_size = BUFSIZE/div_factor;
+  const int bufin_size = calc_buf_size(speed_limit);
   int nbytes = 0;
   struct request_file *request = NULL;
-  char bufin[local_buf_size];
+  char bufin[bufin_size];
   request =  search_request(socket_id, head);
 
   if (request == NULL)
     return ERROR;
 
-  if (send_header_to_client(&request, buf_size, div_factor))
+  if (send_header_to_client(&request, speed_limit))
     return ERROR;
 
-  if (request->sended_size >= request->file_size)
+  if (request->transferred_size  >= request->file_size)
     return SUCCESS;
 
-  memset(bufin, 0, local_buf_size);
+  memset(bufin, 0, bufin_size);
 
   if(request->fp == NULL)
   {
@@ -229,20 +177,18 @@ int send_to_client( const int socket_id,
 
   calc_if_sec_had_pass(&request);
 
-  if ((request->transf_last_sec + strlen(bufin)) > (unsigned) buf_size)
+  if ((request->transf_last_sec + bufin_size) > (unsigned) speed_limit)
     return ERROR;
 
-  nbytes = fread(bufin, 1, local_buf_size,request->fp);
+  nbytes = fread(bufin, 1, bufin_size,request->fp);
   nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
 
   if (nbytes <= 0 )
     return SUCCESS;
 
-  request->sended_size += nbytes;
+  request->transferred_size += nbytes;
   request->transf_last_sec += nbytes;
   return ERROR;
-
-  return SUCCESS;
 }
 /*!
  * \brief Change the current working directoy
@@ -474,4 +420,18 @@ void calc_if_sec_had_pass(struct request_file **r)
     (*r)->transf_last_sec = 0;
     gettimeofday(&((*r)->last_pack), NULL);
   }
+}
+/*!
+ * \brief Calcula se passou um segundo desde a ultima requisicao.
+ * [in] r Estrutura com informacoes da requisicao.
+ * \return O caso tenha passado 1 ou mais segs -1 caso nao.
+ */
+int calc_buf_size(long speed_limit)
+{
+  if (speed_limit >= BUFSIZE)
+    return BUFSIZE;
+  else if (speed_limit != 0)
+    return (long) BUFSIZE/speed_limit;
+  else 
+    return ERROR;
 }
