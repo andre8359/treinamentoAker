@@ -25,19 +25,18 @@
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
 #define BUFSIZE 8*KILOBYTE
-int create_socket(const struct sockaddr_in *p);
-void config_connection(const long port, struct sockaddr_in *serv_info);
-int make_connection(const long port);
-int accept_new_connection(const int socket_id);
+enum states
+{
+  READY_TO_RECEIVE = 1,
+  READY_TO_SEND
+};
 void vector_cpy(char *dst, const char *src, const int begin, const int length);
 int receive_request_from_client( const int socket_id,
                                  struct request_file **head,
-                                 long buf_size,
-                                 long div_factor);
+                                 long speed_limit);
 int send_to_client(const int socket_id,
                    struct request_file **head,
-                   long buf_size,
-                   long div_factor);
+                   long speed_limit);
 int change_root_directory(const char *root_directory);
 int check_file_ready_to_send(struct request_file * request);
 void close_std_file_desc();
@@ -47,4 +46,5 @@ int max(const int a, const int b);
 int min(const int a , const int b);
 long params_is_valid(int argc, char *argv[], long *speed_limit);
 void calc_if_sec_had_pass(struct request_file **r);
+int calc_buf_size(long speed_limit);
 #endif /* SERVER_LIB_H */
