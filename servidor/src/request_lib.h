@@ -14,7 +14,7 @@ struct request_file
 {
   FILE *fp;
   char *file_name, *header, *request;
-  long header_size_sended, file_size, sended_size, transf_last_sec;
+  long header_size_sended, file_size, transferred_size, transf_last_sec;
   int socket_id, status;
   struct timeval last_pack;
   int method;
