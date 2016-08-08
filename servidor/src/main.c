@@ -1,6 +1,7 @@
 #include "server_lib.h"
 #include "request_lib.h"
 #include "http_utils.h"
+#include "socket_utils.h"
 
 int server_socket = 0, end_prog = 1;
 struct request_file *head = NULL;
@@ -21,8 +22,9 @@ int main(int argc,  char *argv[])
 {
   long port = 0;
   int client_socket = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
-  int div_factor = 0;
+  int ret = 0;
   long speed_limit = 0;
+  int buf_size = 0;
   struct timeval time_out, time_waiting;
   memset(&time_waiting, 0, sizeof(time_waiting));
   time_out.tv_sec = 1;
@@ -35,11 +37,7 @@ int main(int argc,  char *argv[])
 
   if (speed_limit == 0)
     speed_limit = LONG_MAX;
-
-  if (speed_limit >= BUFSIZE)
-    div_factor = 1;
-  else
-    div_factor = (long) BUFSIZE/speed_limit;
+  buf_size = calc_buf_size(speed_limit);
 
   server_socket = make_connection(port);
 
@@ -74,33 +72,40 @@ int main(int argc,  char *argv[])
     {
       if (FD_ISSET (i, &read_fd_set))
       {
+        
         if (i == server_socket)
         {
           client_socket = accept_new_connection(server_socket);
+          
           if (client_socket < 0)
             goto on_error;
+          
           min_socket = min(min_socket,client_socket);
           min_socket = max(min_socket,0);
           max_socket = max(max_socket,client_socket);
           max_socket = min(max_socket,FD_SETSIZE);
           FD_SET (client_socket, &active_read_fd_set);
+          continue;
         }
-        else if (receive_request_from_client(i, &head, speed_limit,
-                                             div_factor) == 0)
-          {
-            FD_SET(i, &active_write_fd_set);
-            FD_CLR(i, &active_read_fd_set);
-          }
+        ret = receive_request_from_client(i, &head, speed_limit);
+        if (ret == READY_TO_SEND)
+        {
+          FD_SET(i, &active_write_fd_set);
+          FD_CLR(i, &active_read_fd_set);
+        }
+        else 
+        {
+        }
       }
       else if (FD_ISSET(i, &write_fd_set))
-        if (send_to_client(i, &head, speed_limit, div_factor) == 0)
+        if (send_to_client(i, &head, speed_limit) == 0)
         {
           rm_request(i, &head);
           FD_CLR(i, &active_write_fd_set);
         }
     }
     gettimeofday(&time_waiting, NULL);
-    if (head && (head->transf_last_sec + (BUFSIZE/div_factor)) > speed_limit)
+    if (head && (head->transf_last_sec + buf_size) > speed_limit)
       usleep(1e6 - (time_waiting.tv_usec - head->last_pack.tv_usec));
     time_out.tv_sec = 1;
     time_out.tv_usec = 0;
