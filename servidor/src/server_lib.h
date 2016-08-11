@@ -20,7 +20,6 @@
 #define ERROR -1
 #define SUCCESS 0
 #define SERVER_IP "127.0.0.1"
-#define BACKLOG 5
 #define KILOBYTE 1024
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
@@ -28,16 +27,22 @@
 enum states
 {
   READY_TO_RECEIVE = 1,
-  READY_TO_SEND
+  READY_TO_SEND,
+  ENDED_DOWNLOAD,
+  ENDED_UPLOAD
 };
-void vector_cpy(char *dst, const char *src, const int begin, const int length);
-int receive_request_from_client( const int socket_id,
-                                 struct request_file **head,
-                                 long speed_limit);
+int receive_request_from_client(const int socket_id,
+                                struct request_file **head,
+                                long speed_limit);
+int receive_from_client(const int socket_id,
+                             struct request_file **head,
+                             long speed_limit);
+int rename_downloaded_file(struct request_file *request);
 int send_to_client(const int socket_id,
                    struct request_file **head,
                    long speed_limit);
 int change_root_directory(const char *root_directory);
+int check_file_ready_to_receive(struct request_file * request);
 int check_file_ready_to_send(struct request_file * request);
 void close_std_file_desc();
 void open_background_process();

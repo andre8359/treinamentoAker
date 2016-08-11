@@ -83,8 +83,10 @@ int rm_request(const int socket_id, struct request_file **head)
   if (deleted_request->prev == NULL)
   {
     if (deleted_request->next == NULL)
+    {
+      free_request_file(head);
       return SUCCESS;
-
+    }
     deleted_request = (*head)->next;
     deleted_request->prev = NULL;
     free_request_file(head);

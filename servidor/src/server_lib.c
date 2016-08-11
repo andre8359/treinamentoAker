@@ -5,21 +5,65 @@
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include "server_lib.h"
-/*!
- * \brief Copia o vetor src no vertor dst
- * \param[out] dst Vetor modificado na copia.
- * \param[in] src Vetor que sera copiado.
- * \param[in] begin  Indica a posicao inicial do vertor dst.
- * \param[in] length Indica quantos elementos serao copiados
- */
-void vector_cpy (char *dst, const char *src, const int begin, const int length)
-{
-  int i, j = begin;
 
-  for (i = 0; i <= length; i++)
-    dst[i+j] = src[i];
+static int write_file(struct request_file *request,
+                      char *bufin,
+                      int bufin_size)
+{
+  int nbytes = 0;
+  const int file_name_size = strlen(request->request) + strlen("~part") + 1;
+  char file_name[file_name_size];
+  if (request->fp == NULL)
+  {
+    snprintf(file_name, file_name_size, "%s~part",request->file_name);
+    request->fp = fopen(file_name,"w+");
+    if (request->fp == NULL)
+      return ERROR;
+  }
+
+  nbytes = fwrite(bufin, 1, bufin_size, request->fp);
+
+  return nbytes;
 }
 
+static int read_file(struct request_file *request,
+                      char *bufin,
+                      int bufin_size)
+{
+  int nbytes = 0;
+  
+  if (request->fp == NULL)
+  {
+    request->fp = fopen(request->file_name,"w+");
+    if (request->fp == NULL)
+      return ERROR;
+  }
+
+  nbytes = fread(bufin, 1, bufin_size,request->fp);
+
+  return nbytes;
+}
+static int split_request_from_data(struct request_file *request)
+{
+  char *begin_data = NULL;
+  int bufin_size = 0, nbytes = 0;
+
+  begin_data = find_end_request(request->request);
+
+  if (begin_data == NULL)
+    return ERROR;
+
+  bufin_size =  request->transf_last_sec - (begin_data - request->request);
+
+  nbytes = write_file(request, begin_data, bufin_size);
+
+  if (nbytes < 0)
+    return ERROR;
+
+  request->transferred_size += nbytes;
+  return SUCCESS;
+
+}
 /*!
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
@@ -30,15 +74,25 @@ int receive_request_from_client(const int socket_id,
                                 struct request_file **head,
                                 long speed_limit)
 {
-  const int bufin_size = calc_buf_size(speed_limit);
+  int bufin_size = calc_buf_size(speed_limit);
   char bufin[bufin_size + 1];
   int nbytes = 0, received_size = 0;
   struct request_file *request = NULL;
 
   request = search_request(socket_id, head);
-
   if (request == NULL)
     request = add_request(socket_id, head);
+
+  if ((request->transferred_size >= request->file_size
+      && request->file_size))
+  {
+    fclose(request->fp);
+    request->fp = NULL;
+    return ENDED_UPLOAD;
+  }
+
+  if (find_end_request(request->request))
+    return ERROR;
 
   memset(bufin, 0, bufin_size + 1);
 
@@ -58,45 +112,86 @@ int receive_request_from_client(const int socket_id,
     received_size = 0;
 
   request->request = realloc(request->request, received_size + nbytes + 1);
-  vector_cpy(request->request, bufin, received_size, nbytes - 1);
-  request->request[received_size + nbytes ] = '\0';
+  memcpy(request->request + received_size, bufin, nbytes);
+  request->request[received_size + nbytes] = '\0';
 
-  if (!find_end_request(request->request))
+  if (find_end_request(request->request) != NULL)
   {
      check_request_info(request);
 
      if (request->status == OK)
-       check_file_ready_to_send(request);
-    
-    if (request->method == GET)
+     {
+       if (request->method == GET)
+         check_file_ready_to_send(request);
+       else
+         check_file_ready_to_receive(request);
+     }
+    if (request->method == GET || request->status  != OK)
       return READY_TO_SEND;
+   
+    split_request_from_data(request);
+    if (request->transferred_size >= request->file_size)
+    {
+      fclose(request->fp);
+      request->fp = NULL;
+      return ENDED_UPLOAD;
+    }
+
     return READY_TO_RECEIVE;
   }
 
   return ERROR;
 }
-int receive_file_from_client(struct request_file *request, long speed_limit)
+
+int receive_from_client(const int socket_id,
+                        struct request_file **head,
+                        long speed_limit)
 {
   int bufin_size = calc_buf_size(speed_limit);
   char bufin[BUFSIZE];
-  int nbytes = 0;
-  
-  if (request->transferred_size  >= request->file_size)
-    return SUCCESS;
-  
-  if (request->transf_last_sec < speed_limit)
-  {
-    nbytes = recv(request->socket_id, bufin, bufin_size, 0);
-    
-    if (nbytes <= 0)
-      return SUCCESS;
+  int nbytes = 0, ret = 0;
+  struct request_file *request = NULL;
 
-    request->header_size_sended += nbytes;
-    return ERROR;
+  request = search_request(socket_id, head);
+  if (request == NULL)
+  {
+    ret = receive_request_from_client(socket_id, head, speed_limit);
+    return ret;
   }
 
-  return SUCCESS;
+  if (request->transf_last_sec < speed_limit)
+  {
+    memset(bufin, 0, bufin_size);
+    if (bufin_size > (request->file_size - request->transferred_size))
+       bufin_size = (request->file_size - request->transferred_size);
+    nbytes = recv(request->socket_id, bufin, bufin_size, 0);
 
+    nbytes = write_file(request, bufin, nbytes);
+
+    if (nbytes <= 0)
+      return ENDED_UPLOAD;
+
+    request->transferred_size += nbytes;
+
+    if (request->transferred_size >= request->file_size)
+      return ENDED_UPLOAD;
+
+    return ERROR;
+  }
+  return SUCCESS;
+}
+int rename_downloaded_file(struct request_file *request)
+{
+  char downloaded_file_name[PATH_MAX];
+
+  if (request == NULL)
+    return ERROR;
+
+  snprintf(downloaded_file_name,
+           strlen(request->file_name) + strlen("~part") + 1,
+           "%s~part",
+           request->file_name);
+  return rename(downloaded_file_name,request->file_name);
 }
 /*!
  * \brief Envia header pro cliente conectado.
@@ -180,7 +275,7 @@ int send_to_client( const int socket_id,
   if ((request->transf_last_sec + bufin_size) > (unsigned) speed_limit)
     return ERROR;
 
-  nbytes = fread(bufin, 1, bufin_size,request->fp);
+  nbytes = read_file(request, bufin, bufin_size);
   nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
 
   if (nbytes <= 0 )
@@ -215,10 +310,11 @@ int check_file_ready_to_send(struct request_file * request)
   char root_directory[PATH_MAX];
   char abs_path[PATH_MAX];
   struct stat path_stat;
+
   if (request->file_name == NULL)
     return ERROR;
 
-  if (access(request->file_name, F_OK) != -1)
+  if (access(request->file_name, F_OK) != -1 )
   {
     stat(request->file_name, &path_stat);
     if (S_ISDIR(path_stat.st_mode))
@@ -233,20 +329,83 @@ int check_file_ready_to_send(struct request_file * request)
       request->status = FORBIDDEN;
       goto on_error;
     }
-    else if (access(request->file_name, R_OK) < 0)
+    if (access(request->file_name, R_OK) < 0)
     {
       request->status = UNAUTHORIZED;
       goto on_error;
     }
-
-    return SUCCESS;
   }
-
-  request->status = NOT_FOUND;
+  else
+  {
+    request->status = NOT_FOUND;
+    goto on_error;
+  }
+  return SUCCESS;
 on_error:
- set_std_response(request);
+  set_std_response(request);
   return ERROR;
 }
+/*!
+ * \brief Checa pode ser recebido.
+ * \param[in] request Estrutura com as informacoes do arquivo requisitado.
+ * \return 0 para sucesso e <0 para falha.
+ */
+int check_file_ready_to_receive(struct request_file * request)
+{
+  char root_directory[PATH_MAX];
+  char abs_path[PATH_MAX];
+  char file_name_part[PATH_MAX];
+  char *last_slash = NULL; 
+  struct stat path_stat;
+
+  if (request->file_name == NULL)
+    return ERROR;
+  
+  getcwd(root_directory,PATH_MAX);
+  realpath(request->file_name, abs_path);
+
+  if (strstr(abs_path, root_directory) == NULL)
+  {
+    request->status = FORBIDDEN;
+    goto on_error;
+  }
+  last_slash = strrchr(abs_path,'/');
+  memset(last_slash, 0, strlen(last_slash));
+  if (access(abs_path, F_OK) != -1 )
+  {
+    stat(request->file_name, &path_stat);
+    if (S_ISDIR(path_stat.st_mode))
+    {
+      request->status = BAD_REQUEST;
+      goto on_error;
+    }
+
+    if (access(abs_path, W_OK) < 0)
+    {
+      request->status = UNAUTHORIZED;
+      goto on_error;
+    }
+    snprintf(file_name_part, strlen(request->file_name) + strlen("~part") + 1,
+            "%s~part", request->file_name);
+    
+    if (access(file_name_part, F_OK) == 0)
+    {
+      request->status = CONFLICT;
+      goto on_error;
+    }
+  }
+  else
+  {
+    request->status = FORBIDDEN;
+    goto on_error;
+  }
+
+  return SUCCESS;
+on_error:
+  set_std_response(request);
+  return ERROR;
+}
+
 /*!
  * \brief Fecha os arquivos abertos pelo SO (STDIN, STDOUT, STDERR).
  */
@@ -277,9 +436,8 @@ void open_background_process()
 int max(const int a , const int b)
 {
   if (a > b)
-    return a;
-
-  return b;
+    return (a > FD_SETSIZE ? FD_SETSIZE : a);
+  return (b > FD_SETSIZE ? FD_SETSIZE : b);
 }
 /*!
  * \brief Retorna o menor entre dois inteiros.
@@ -290,9 +448,9 @@ int max(const int a , const int b)
 int min(const int a , const int b)
 {
   if (a < b)
-    return a;
+    return (a < 0 ? 0 : a);
+  return (b < 0 ? 0 : b);
 
-  return b;
 }
 /*!
  * \brief Realiza a coleta dos parametros de entrada.
@@ -432,6 +590,6 @@ int calc_buf_size(long speed_limit)
     return BUFSIZE;
   else if (speed_limit != 0)
     return (long) BUFSIZE/speed_limit;
-  else 
+  else
     return ERROR;
 }
