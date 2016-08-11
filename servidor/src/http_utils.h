@@ -23,11 +23,12 @@ enum status_conection
   UNAUTHORIZED,
   FORBIDDEN,
   NOT_FOUND,
+  CONFLICT,
   INTERNAL_ERROR,
   SERVICE_UNAVAILABLE,
   LAST_STATUS
 };
-int find_end_request(char *header);
+char *find_end_request(char *header);
 void check_request_info(struct request_file *request);
 char *make_header(const char *file_name, const int status,
                   long *file_size);

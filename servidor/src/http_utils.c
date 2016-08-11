@@ -14,6 +14,7 @@ const char *status_conection [] = {
   "HTTP/1.0 401 Unauthorized\r\n",
   "HTTP/1.0 403 Forbidden\r\n",
   "HTTP/1.0 404 Not Found\r\n",
+  "HTTP/1.0 409 Conflict\r\n",
   "HTTP/1.0 500 Internal Server Error\r\n",
   "HTTP/1.0 503 Service Unavailable\r\n"
 };
@@ -33,16 +34,17 @@ const char *messages_status [] ={
     "  <p>Este servidor nao entendeu sua requisicao.</p>\n"
     " </body>\n"
     "</html>\n",
-  "<h1> 401 - Unauthorized</h1>",
-  "<h1> 403 - Forbidden</h1>",
+  "<h1> 401 - Unauthorized</h1>\n",
+  "<h1> 403 - Forbidden</h1>\n",
   "<html>\n"
     " <body>\n"
     "  <h1>404 - Not Found</h1>\n"
     "  <p>A URL requisitada nao pode ser encontrada nesse servidor.</p>\n"
     " </body>\n"
     "</html>\n",
-  "<h1> 500 - Internal Server Error</h1>",
-  "<h1> 503 - Service Unavailable</h1>"
+  "<h1> 409 - Conflict</h1>\n",
+  "<h1> 500 - Internal Server Error</h1>\n",
+  "<h1> 503 - Service Unavailable</h1>\n"
 };
 
 /*Nomes do arquivos com html das respostas padao.*/
@@ -53,6 +55,7 @@ const char  *std_response_file_names[] = {
   "unauthorized.html",
   "forbidden.html",
   "not_found.html",
+  "conflict.html",
   "internal_error.html",
   "service_unavailable.html",
 };
@@ -70,16 +73,21 @@ static char *get_date();
  * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
-int find_end_request(char *request)
+char *find_end_request(char *request)
 {
-  if ((strstr(request, "\r\n\r\n")) != NULL)
-    return SUCCESS;
-  else if ((strstr(request,"\n\n")) != NULL)
-    return SUCCESS;
-  else if ((strstr(request,"\n\r\n\r")) != NULL)
-    return SUCCESS;
+  char *ch = NULL;
+  
+  if (request == NULL)
+    return NULL;
 
-  return ERROR;
+  if ((ch = strstr(request, "\r\n\r\n")) != NULL)
+    return ch + 4;
+  else if ((ch = strstr(request,"\n\n")) != NULL)
+    return ch + 2;
+  else if ((ch = strstr(request,"\n\r\n\r")) != NULL)
+    return ch + 4;
+
+  return NULL;
 }
 
 void check_request_info(struct request_file *request)
@@ -111,8 +119,12 @@ on_error:
 static void get_request_info(struct request_file *request)
 {
   char file_path[PATH_MAX];
-  const int command_len = 5, http_version_len = 10;
-  char command[command_len], http_version[http_version_len];
+  const int command_size = 5, http_version_size = 10;
+  char command[command_size], http_version[http_version_size];
+  
+  memset(file_path, 0, PATH_MAX); 
+  memset(command, 0, command_size); 
+  memset(http_version, 0, http_version_size); 
 
   sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, file_path,
          http_version);
@@ -193,7 +205,7 @@ int set_std_response(struct request_file *r)
 char *make_header(const char *file_name, const int status,
                   long *file_size)
 {
-  const char server[] = "Server: Cacique/1.0\r\n";
+  const char server[] = "Server: Cacique/0.0.1\r\n";
   const int end_header_len = 2;
   char *content_length = set_content_length(file_name, file_size);
   char *date = get_date();
