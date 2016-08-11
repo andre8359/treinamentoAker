@@ -11,7 +11,7 @@
 #define ERROR -1
 #define SUCCESS 0
 #define SERVER_IP "127.0.0.1"
-#define BACKLOG 5
+#define BACKLOG FD_SETSIZE
 #define KILOBYTE 1024
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
