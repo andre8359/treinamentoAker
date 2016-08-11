@@ -20,16 +20,20 @@ void clean_up()
 
 int main(int argc,  char *argv[])
 {
+
   long port = 0;
   int client_socket = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
   int ret = 0;
   long speed_limit = 0;
   int buf_size = 0;
+  struct request_file *request = NULL;
   struct timeval time_out, time_waiting;
+  fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
+
   memset(&time_waiting, 0, sizeof(time_waiting));
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
-  fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
+
   port = params_is_valid(argc, argv, &speed_limit);
 
   if (port < 0)
@@ -63,38 +67,44 @@ int main(int argc,  char *argv[])
   {
     read_fd_set = active_read_fd_set;
     write_fd_set = active_write_fd_set;
-    if (select(max_socket+1, &read_fd_set, &write_fd_set, NULL,&time_out) < 0)
+
+    if (select(max_socket + 1,&read_fd_set,&write_fd_set,NULL,&time_out) < 0)
     {
       fprintf(stderr,"Erro ao tentar selecionar sockets!\n");
       goto on_error;
     }
+
     for (i = min_socket; i <= max_socket; i++)
     {
       if (FD_ISSET (i, &read_fd_set))
       {
-        
+
         if (i == server_socket)
         {
           client_socket = accept_new_connection(server_socket);
-          
+
           if (client_socket < 0)
             goto on_error;
-          
-          min_socket = min(min_socket,client_socket);
-          min_socket = max(min_socket,0);
-          max_socket = max(max_socket,client_socket);
-          max_socket = min(max_socket,FD_SETSIZE);
+
+          min_socket = min(min_socket, client_socket);
+          max_socket = max(max_socket, client_socket);
           FD_SET (client_socket, &active_read_fd_set);
           continue;
         }
-        ret = receive_request_from_client(i, &head, speed_limit);
+        ret = receive_from_client(i, &head, speed_limit);
         if (ret == READY_TO_SEND)
         {
           FD_SET(i, &active_write_fd_set);
           FD_CLR(i, &active_read_fd_set);
         }
-        else 
+        else if(ret == ENDED_UPLOAD)
         {
+          request = search_request(i, &head);
+          rename_downloaded_file(request);
+          request->status = CREATED;
+          set_std_response(request);
+          FD_SET(i, &active_write_fd_set);
+          FD_CLR(i, &active_read_fd_set);
         }
       }
       else if (FD_ISSET(i, &write_fd_set))
