@@ -13,15 +13,15 @@ static int write_file(struct request_file *request,
   int nbytes = 0;
   const int file_name_size = strlen(request->request) + strlen("~part") + 1;
   char file_name[file_name_size];
-  if (request->fp == NULL)
+  if (request->fd <= 0)
   {
     snprintf(file_name, file_name_size, "%s~part",request->file_name);
-    request->fp = fopen(file_name,"w+");
-    if (request->fp == NULL)
+    request->fd = open(file_name,O_WRONLY|O_CREAT);
+    if (request->fd <= 0)
       return ERROR;
   }
 
-  nbytes = fwrite(bufin, 1, bufin_size, request->fp);
+  nbytes = pwrite(request->fd, bufin, bufin_size, request->transferred_size);
 
   return nbytes;
 }
@@ -31,15 +31,15 @@ static int read_file(struct request_file *request,
                       int bufin_size)
 {
   int nbytes = 0;
-  
-  if (request->fp == NULL)
+
+  if (request->fd <= 0)
   {
-    request->fp = fopen(request->file_name,"w+");
-    if (request->fp == NULL)
+    request->fd = open(request->file_name,O_RDONLY, request->transferred_size);
+    if (request->fd <= 0)
       return ERROR;
   }
 
-  nbytes = fread(bufin, 1, bufin_size,request->fp);
+  nbytes = pread(request->fd , bufin, bufin_size, request->transferred_size);
 
   return nbytes;
 }
@@ -86,8 +86,8 @@ int receive_request_from_client(const int socket_id,
   if ((request->transferred_size >= request->file_size
       && request->file_size))
   {
-    fclose(request->fp);
-    request->fp = NULL;
+    close(request->fd);
+    request->fd = 0;
     return ENDED_UPLOAD;
   }
 
@@ -128,12 +128,12 @@ int receive_request_from_client(const int socket_id,
      }
     if (request->method == GET || request->status  != OK)
       return READY_TO_SEND;
-   
+
     split_request_from_data(request);
     if (request->transferred_size >= request->file_size)
     {
-      fclose(request->fp);
-      request->fp = NULL;
+      close(request->fd);
+      request->fd = 0;
       return ENDED_UPLOAD;
     }
 
@@ -167,7 +167,7 @@ int receive_from_client(const int socket_id,
     nbytes = recv(request->socket_id, bufin, bufin_size, 0);
 
     nbytes = write_file(request, bufin, nbytes);
-
+    pthread_cond_signal(&cond);
     if (nbytes <= 0)
       return ENDED_UPLOAD;
 
@@ -186,11 +186,8 @@ int rename_downloaded_file(struct request_file *request)
 
   if (request == NULL)
     return ERROR;
-
-  snprintf(downloaded_file_name,
-           strlen(request->file_name) + strlen("~part") + 1,
-           "%s~part",
-           request->file_name);
+  
+  sprintf(downloaded_file_name, "%s~part", request->file_name);
   return rename(downloaded_file_name,request->file_name);
 }
 /*!
@@ -261,14 +258,6 @@ int send_to_client( const int socket_id,
     return SUCCESS;
 
   memset(bufin, 0, bufin_size);
-
-  if(request->fp == NULL)
-  {
-    request->fp = fopen(request->file_name,"r");
-
-    if (request->fp == NULL)
-      return ERROR;
-  }
 
   calc_if_sec_had_pass(&request);
 

@@ -15,11 +15,14 @@
 #include <errno.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "request_lib.h"
 #include "http_utils.h"
+#include "thread_utils.h"
 #define ERROR -1
 #define SUCCESS 0
-#define SERVER_IP "127.0.0.1"
+#define LOCAL_SOCKET_NAME "local.soket"
 #define KILOBYTE 1024
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
