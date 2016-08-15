@@ -2,30 +2,48 @@
 #include "request_lib.h"
 #include "http_utils.h"
 #include "socket_utils.h"
+#include "thread_utils.h"
 
-int server_socket = 0, end_prog = 1;
+int server_socket = 0;
+int local_socket = 0;
+int end_prog = 1;
+
 struct request_file *head = NULL;
-
+struct thread_args args;
 /*!
  * \brief Libera memoria para finalizar programa.
  */
 void clean_up()
 {
   close_std_file_desc();
+  
   free_request_list(&head);
+  
   if (server_socket)
     close(server_socket);
+  
+  if (local_socket)
+    close(local_socket);
+  
+  args.quit = 0;
+  destroy_threads();
+  pthread_cond_broadcast(&cond);
+  join_threads();
+
   end_prog = 0;
 }
 
 int main(int argc,  char *argv[])
 {
 
-  long port = 0;
-  int client_socket = 0, i = 0, max_socket = FD_SETSIZE, min_socket = 0;
+  int client_socket = 0;
+  int i = 0;
+  int max_socket = FD_SETSIZE;
+  int min_socket = 0;
   int ret = 0;
-  long speed_limit = 0;
   int buf_size = 0;
+  long speed_limit = 0;
+  long port = 0;
   struct request_file *request = NULL;
   struct timeval time_out, time_waiting;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
@@ -33,6 +51,9 @@ int main(int argc,  char *argv[])
   memset(&time_waiting, 0, sizeof(time_waiting));
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
+  init_threads();
+  init_thread_args(&args);
+  create_threads(&args);
 
   port = params_is_valid(argc, argv, &speed_limit);
 
@@ -41,6 +62,7 @@ int main(int argc,  char *argv[])
 
   if (speed_limit == 0)
     speed_limit = LONG_MAX;
+
   buf_size = calc_buf_size(speed_limit);
 
   server_socket = make_connection(port);
@@ -48,18 +70,22 @@ int main(int argc,  char *argv[])
   if (server_socket < 0)
     goto on_error;
 
-  if (listen(server_socket, 1) < 0)
+  if (listen(server_socket, BACKLOG) < 0)
     goto on_error;
 
+  local_socket = make_named_socket(LOCAL_SOCKET_NAME);
+  
   signal(SIGINT,clean_up);
-
+  
   FD_ZERO (&active_read_fd_set);
   FD_ZERO (&active_write_fd_set);
   FD_ZERO (&read_fd_set);
   FD_ZERO (&write_fd_set);
   FD_SET (server_socket, &active_read_fd_set);
-  min_socket = server_socket;
-  max_socket = server_socket+1;
+  FD_SET (local_socket, &active_read_fd_set);
+
+  min_socket = min(server_socket, local_socket);
+  max_socket = max(server_socket, local_socket) + 1;
   time_out.tv_sec = 1;
   time_out.tv_usec = 0;
 
@@ -91,6 +117,13 @@ int main(int argc,  char *argv[])
           FD_SET (client_socket, &active_read_fd_set);
           continue;
         }
+        else if (i == local_socket)
+        {
+          char message[BUFSIZE];
+          int nbytes = read (local_socket, message, BUFSIZE);
+          fprintf(stderr,"%d - %s",nbytes, message); 
+        }
+
         ret = receive_from_client(i, &head, speed_limit);
         if (ret == READY_TO_SEND)
         {
@@ -100,6 +133,8 @@ int main(int argc,  char *argv[])
         else if(ret == ENDED_UPLOAD)
         {
           request = search_request(i, &head);
+          if (request->fd)
+            close(request->fd);
           rename_downloaded_file(request);
           request->status = CREATED;
           set_std_response(request);
