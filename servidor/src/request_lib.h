@@ -10,15 +10,30 @@
 #define PATH_MAX 4096
 #define ERROR -1
 #define SUCCESS 0
+
+enum method
+{
+  GET = 1,
+  PUT,
+  LAST_METHOD
+};
+
 struct request_file
 {
-  FILE *fp;
-  char *file_name, *header, *request;
-  long header_size_sended, file_size, transferred_size, transf_last_sec;
-  int socket_id, status;
-  struct timeval last_pack;
+  int  fd;
+  char *file_name;
+  char *header;
+  char *request;
+  long header_size_sended;
+  long file_size;
+  long transferred_size;
+  long transf_last_sec;
+  int socket_id;
+  int status;
   int method;
-  struct request_file *prev, *next;
+  struct timeval last_pack;
+  struct request_file *prev;
+  struct request_file *next;
 };
 struct request_file* add_request(const int socket_id,
                                  struct request_file **head);

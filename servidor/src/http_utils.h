@@ -9,12 +9,6 @@
 #include "request_lib.h"
 #include <errno.h>
 #define MAX_HEADER_SIZE 4000
-enum method
-{
-  GET = 1,
-  PUT,
-  LAST_METHOD
-};
 enum status_conection
 {
   OK = 1,

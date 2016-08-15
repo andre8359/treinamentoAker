@@ -48,9 +48,9 @@ static void free_request_file(struct request_file **r)
   free((*r)->file_name);
   free((*r)->request);
   free((*r)->header);
-
-  if ((*r)->fp != NULL)
-    fclose((*r)->fp);
+  
+  if ((*r)->fd <= 0)
+    close((*r)->fd);
 
   if ((*r)->socket_id)
     close((*r)->socket_id);
