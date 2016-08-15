@@ -48,11 +48,9 @@ void *thread_func(void *arguments)
     pthread_mutex_lock(&mutex);
     pthread_cond_wait(&cond, &mutex);
     /* FILE IO*/
-    fprintf(stderr,"\n - %d- \n", args->quit);
     write(args->socket_id, msg, strlen(msg));
     /* FILE IO*/
     pthread_mutex_unlock(&mutex);
   }
-  fprintf(stderr,"\n - %d- \n bye shurembos!", args->quit);
   pthread_exit(NULL);
 }

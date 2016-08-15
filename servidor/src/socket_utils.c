@@ -80,3 +80,27 @@ int accept_new_connection(const int socket_id)
 
   return new_socket_id;
 }
+
+int make_named_socket (const char *file_name)
+{
+  struct sockaddr_un name;
+  int socket_id = 0;
+  size_t size = 0;
+
+  unlink (file_name);
+
+  socket_id = socket (PF_LOCAL, SOCK_DGRAM, 0);
+
+  if (socket_id < 0)
+    return ERROR;
+
+  name.sun_family = AF_LOCAL;
+  strncpy (name.sun_path, file_name, sizeof(name.sun_path));
+  name.sun_path[sizeof (name.sun_path) - 1] = '\0';
+
+  size = (offsetof (struct sockaddr_un, sun_path) + strlen(name.sun_path));
+
+  if (bind(socket_id, (struct sockaddr *) &name, size) < 0)
+    return ERROR;
+  return socket_id;
+}

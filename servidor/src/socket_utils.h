@@ -8,6 +8,9 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <sys/un.h>
+#include <stddef.h>
+#include <unistd.h>
 #define ERROR -1
 #define SUCCESS 0
 #define SERVER_IP "127.0.0.1"
@@ -20,4 +23,5 @@ int create_socket(const struct sockaddr_in *p);
 void config_connection(const long port, struct sockaddr_in *serv_info);
 int make_connection(const long port);
 int accept_new_connection(const int socket_id);
+int make_named_socket (const char *file_name);
 #endif

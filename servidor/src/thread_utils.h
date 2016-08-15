@@ -21,12 +21,10 @@ struct thread_args
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
 extern pthread_t threads[NUM_THREADS];
-extern pthread_attr_t attr;
 
 void init_threads();
 void join_threads();
 void destroy_threads();
-
 void init_thread_args(struct thread_args *args);
 void create_threads();
 void *thread_func(void *arguments);
