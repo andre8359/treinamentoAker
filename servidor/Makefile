@@ -13,9 +13,9 @@ else
  CFLAGS += -ggdb3
 endif
 
-LIBS=-lm
+LIBS=-lm -lpthread
 
-_DEPS_C = server_lib.c request_lib.c http_utils.c socket_utils.c
+_DEPS_C = server_lib.c request_lib.c http_utils.c socket_utils.c thread_utils.c
 _DEPS = $(_DEPS_C) $(patsubst %.c,%.h,$(_DEPS_C))
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
