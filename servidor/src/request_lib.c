@@ -14,26 +14,30 @@
  * \return  NULL em caso de erro ou um ponteiro para nova requisicao em caso de
  *  sucesso.
  */
-struct request_file* add_request(const int socket_id,
-                                 struct request_file **head)
+struct request_file* add_request_file(const int socket_id,
+                                      struct request_file **head)
 {
-  struct request_file *temp;
+  struct request_file *aux;
+  
   if (*head == NULL)
   {
-    *head = (struct request_file *) malloc (sizeof(struct request_file));
-    memset(*head, 0, sizeof(**head));
+    *head = (struct request_file *) calloc (1, sizeof(struct request_file));
     (*head)->socket_id = socket_id;
+    (*head)->buffer =  (char *) calloc (BUFSIZE, sizeof(char));
     return *head;
   }
-  temp = *head;
-  while (temp->next)
-    temp = temp->next;
+
+  aux = *head;
+  
+  while (aux->next)
+    aux = aux->next;
+  
   struct request_file *new_request =
-    (struct request_file *) malloc(sizeof(struct request_file));
-  memset(new_request, 0, sizeof(*new_request));
+    (struct request_file *) calloc(1, sizeof(struct request_file));
+  
   new_request->socket_id = socket_id;
-  new_request->prev = temp;
-  temp->next = new_request;
+  new_request->prev = aux;
+  aux->next = new_request;
 
   return new_request;
 }
@@ -48,8 +52,9 @@ static void free_request_file(struct request_file **r)
   free((*r)->file_name);
   free((*r)->request);
   free((*r)->header);
-  
-  if ((*r)->fd <= 0)
+  free((*r)->buffer);
+
+  if ((*r)->fd)
     close((*r)->fd);
 
   if ((*r)->socket_id)
@@ -66,7 +71,7 @@ static void free_request_file(struct request_file **r)
  * \return NULL em caso de erro ou um ponteiro para deletada requisicao em caso
  *  de sucesso.
  */
-int rm_request(const int socket_id, struct request_file **head)
+int rm_request_file(const int socket_id, struct request_file **head)
 {
   struct request_file *deleted_request = NULL;
   struct request_file *swap_request_prev = NULL;
@@ -75,7 +80,7 @@ int rm_request(const int socket_id, struct request_file **head)
   if (*head == NULL)
     return ERROR;
 
-  deleted_request = search_request(socket_id, head);
+  deleted_request = search_request_file(socket_id, head);
 
   if (deleted_request == NULL)
     return ERROR;
@@ -87,10 +92,12 @@ int rm_request(const int socket_id, struct request_file **head)
       free_request_file(head);
       return SUCCESS;
     }
+
     deleted_request = (*head)->next;
     deleted_request->prev = NULL;
     free_request_file(head);
     *head = deleted_request;
+    
     return SUCCESS;
   }
 
@@ -100,7 +107,9 @@ int rm_request(const int socket_id, struct request_file **head)
 
   if (swap_request_next != NULL)
     swap_request_next->prev = swap_request_prev;
+  
   free_request_file(&deleted_request);
+  
   return SUCCESS;
 }
 /*!
@@ -111,27 +120,27 @@ int rm_request(const int socket_id, struct request_file **head)
  * \return  NULL em caso de erro ou um ponteiro para requisicao em caso de
  *  sucesso.
  */
-struct request_file* search_request(const int socket_id,
-                                    struct request_file **head)
+struct request_file* search_request_file(const int socket_id,
+                                         struct request_file **head)
 {
-  struct request_file *temp;
+  struct request_file *aux;
   if (*head == NULL)
     return NULL;
 
-  temp = *head;
-  while ((temp) && (temp->socket_id != socket_id ))
-    temp = temp->next;
+  aux = *head;
+  while ((aux) && (aux->socket_id != socket_id ))
+    aux = aux->next;
 
- if (temp == NULL)
+ if (aux == NULL)
     return NULL;
 
-  return temp;
+  return aux;
 }
 /*!
  * \brief Realiza a liberacao de uma lista de requisicoes.
  * \param[in]  head  Ponteiro para o primeiro elemento da lista.
  */
-void free_request_list(struct request_file **head)
+void free_request_file_list(struct request_file **head)
 {
   struct request_file *i, *j = NULL;
   i = *head;
@@ -146,18 +155,89 @@ void free_request_list(struct request_file **head)
  * \brief Realiza a print dos descritores de uma lista de requisicoes.
  * \param[in]  head  Ponteiro para o primeiro elemento da lista.
  */
-void print_request_list(struct request_file **head)
+void print_request_file_list(struct request_file **head)
 {
-  struct request_file *temp;
+  struct request_file *aux;
 
   if (*head == NULL)
     return;
 
-  temp =  *head;
+  aux =  *head;
 
-  while (temp)
+  while (aux)
   {
-    fprintf(stdout, "%d \n", temp->socket_id);
-    temp = temp->next;
+    fprintf(stdout, "%d \n", aux->socket_id);
+    aux = aux->next;
   }
+}
+
+struct request_io* enqueue_request_io(struct manager_io **manager,
+                                      struct request_io request)
+{
+  struct manager_io *m = *manager;
+  struct request_io *aux = NULL;
+  struct request_io *new_request = NULL;
+ 
+  if (m->head == NULL)
+  {
+    m->head = (struct request_io *) calloc (1, sizeof(struct request_io));
+    memcpy(m->head ,&request, sizeof(struct request_io));
+    m->total_request++;
+    return m->head;
+  }
+
+  aux = m->head;
+  
+  while (aux->next)
+    aux = aux->next;
+  
+  new_request = (struct request_io *) calloc(1, sizeof(struct request_io)); 
+  
+  memcpy(new_request , &request, sizeof(struct request_io));
+
+  aux->next = new_request;
+  m->total_request++;
+
+  return new_request;
+}
+
+struct request_io* dequeue_request_io(struct manager_io **manager)
+{
+  struct manager_io *m = *manager;
+  struct request_io *aux = NULL;
+  
+  if (m->head == NULL)
+    return NULL;
+  aux = m->head;
+  m->head = aux->next;
+  m->total_request--;
+  return aux;
+}
+void free_request_io(struct request_io **request)
+{
+  struct request_io *r = *request;
+
+  if (r->fd)
+    close(r->fd);
+  r->fd = 0;
+
+  if (r->buffer)
+    free(r->buffer);
+  r->buffer = NULL;
+
+  free(r);
+}
+void free_request_io_list(struct manager_io **manager)
+{
+  struct manager_io *m = *manager;
+  struct request_io *i, *j = NULL;
+  
+  i = m->head;
+  while (i)
+  {
+    j = i->next;
+    free_request_io(&i);
+    i = j;
+  }
+  m->total_request = 0;
 }
