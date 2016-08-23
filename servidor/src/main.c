@@ -4,56 +4,38 @@
 #include "socket_utils.h"
 #include "thread_utils.h"
 
-int server_socket = 0;
-int local_socket = 0;
-int end_prog = 1;
 
-struct request_file *head = NULL;
-struct thread_args args;
+int quit = 1;
 /*!
  * \brief Libera memoria para finalizar programa.
  */
 void clean_up()
 {
-  close_std_file_desc();
-  
-  free_request_list(&head);
-  
-  if (server_socket)
-    close(server_socket);
-  
-  if (local_socket)
-    close(local_socket);
-  
-  args.quit = 0;
-  destroy_threads();
-  pthread_cond_broadcast(&cond);
-  join_threads();
-
-  end_prog = 0;
+  quit = 0;
+  fprintf(stderr,"SINAL : SIGINT recebido !\n");
+  return;
 }
 
 int main(int argc,  char *argv[])
 {
-
   int client_socket = 0;
   int i = 0;
   int max_socket = FD_SETSIZE;
   int min_socket = 0;
   int ret = 0;
   int buf_size = 0;
+  int fd[] = {0, 0};
   long speed_limit = 0;
   long port = 0;
   struct request_file *request = NULL;
-  struct timeval time_out, time_waiting;
+  struct timeval time_waiting;
+  int server_socket = 0;
+  int local_socket = 0;
+  struct request_file *head = NULL;
+  struct manager_io *manager_thread = NULL, *manager_client = NULL;
   fd_set active_read_fd_set, active_write_fd_set, read_fd_set, write_fd_set;
 
   memset(&time_waiting, 0, sizeof(time_waiting));
-  time_out.tv_sec = 1;
-  time_out.tv_usec = 0;
-  init_threads();
-  init_thread_args(&args);
-  create_threads(&args);
 
   port = params_is_valid(argc, argv, &speed_limit);
 
@@ -73,10 +55,21 @@ int main(int argc,  char *argv[])
   if (listen(server_socket, BACKLOG) < 0)
     goto on_error;
 
-  local_socket = make_named_socket(LOCAL_SOCKET_NAME);
-  
+  if (make_local_socket(fd) < 0)
+    goto on_error;
+
+  local_socket = fd[0];
+
+  manager_thread = (struct manager_io *) calloc(1, sizeof(struct manager_io));
+  manager_client = (struct manager_io *) calloc(1, sizeof(struct manager_io));
+
+  manager_thread->quit = 1;
+  manager_thread->local_socket = fd[1];
+
+  init_threads(&manager_thread);
+
   signal(SIGINT,clean_up);
-  
+
   FD_ZERO (&active_read_fd_set);
   FD_ZERO (&active_write_fd_set);
   FD_ZERO (&read_fd_set);
@@ -86,15 +79,13 @@ int main(int argc,  char *argv[])
 
   min_socket = min(server_socket, local_socket);
   max_socket = max(server_socket, local_socket) + 1;
-  time_out.tv_sec = 1;
-  time_out.tv_usec = 0;
 
-  while (end_prog)
+  while (quit)
   {
     read_fd_set = active_read_fd_set;
     write_fd_set = active_write_fd_set;
 
-    if (select(max_socket + 1,&read_fd_set,&write_fd_set,NULL,&time_out) < 0)
+    if (select(max_socket + 1, &read_fd_set, &write_fd_set,NULL,NULL) < 0)
     {
       fprintf(stderr,"Erro ao tentar selecionar sockets!\n");
       goto on_error;
@@ -104,7 +95,6 @@ int main(int argc,  char *argv[])
     {
       if (FD_ISSET (i, &read_fd_set))
       {
-
         if (i == server_socket)
         {
           client_socket = accept_new_connection(server_socket);
@@ -119,9 +109,8 @@ int main(int argc,  char *argv[])
         }
         else if (i == local_socket)
         {
-          char message[BUFSIZE];
-          int nbytes = read (local_socket, message, BUFSIZE);
-          fprintf(stderr,"%d - %s",nbytes, message); 
+          ret = handle_thread_answer(local_socket, &manager_client);
+          continue;
         }
 
         ret = receive_from_client(i, &head, speed_limit);
@@ -132,7 +121,7 @@ int main(int argc,  char *argv[])
         }
         else if(ret == ENDED_UPLOAD)
         {
-          request = search_request(i, &head);
+          request = search_request_file(i, &head);
           if (request->fd)
             close(request->fd);
           rename_downloaded_file(request);
@@ -141,21 +130,56 @@ int main(int argc,  char *argv[])
           FD_SET(i, &active_write_fd_set);
           FD_CLR(i, &active_read_fd_set);
         }
+        else if (ret == ERROR)
+        {
+          rm_request_file(i, &head);
+          FD_CLR(i, &active_read_fd_set);
+        }
       }
       else if (FD_ISSET(i, &write_fd_set))
-        if (send_to_client(i, &head, speed_limit) == 0)
+      {
+        ret = send_to_client(i, speed_limit, &manager_client, &head);
+        if (ret == ENDED_DOWNLOAD)
         {
-          rm_request(i, &head);
+          rm_request_file(i, &head);
           FD_CLR(i, &active_write_fd_set);
+          continue;
         }
+        ret = request_read(i, &head, &manager_thread, speed_limit);
+      }
     }
     gettimeofday(&time_waiting, NULL);
     if (head && (head->transf_last_sec + buf_size) > speed_limit)
       usleep(1e6 - (time_waiting.tv_usec - head->last_pack.tv_usec));
-    time_out.tv_sec = 1;
-    time_out.tv_usec = 0;
   }
 
 on_error:
+  if (manager_thread)
+  {
+    manager_thread->quit = 0;
+    pthread_cond_broadcast(&cond);
+    destroy_threads(&manager_thread);
+
+    free_request_io_list(&manager_thread);
+
+    if (manager_thread->local_socket > 0)
+      close(manager_thread->local_socket);
+
+    free(manager_thread);
+  }
+  if (manager_client)
+  {
+    if (manager_client->head)
+      free_request_io_list(&manager_client);
+    free(manager_client);
+  }
+  close_std_file_desc();
+
+  free_request_file_list(&head);
+  if (server_socket > 0)
+    close(server_socket);
+
+  if (local_socket > 0)
+    close(local_socket);
   return 0;
 }
