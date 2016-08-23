@@ -26,23 +26,6 @@ static int write_file(struct request_file *request,
   return nbytes;
 }
 
-static int read_file(struct request_file *request,
-                      char *bufin,
-                      int bufin_size)
-{
-  int nbytes = 0;
-
-  if (request->fd <= 0)
-  {
-    request->fd = open(request->file_name,O_RDONLY, request->transferred_size);
-    if (request->fd <= 0)
-      return ERROR;
-  }
-
-  nbytes = pread(request->fd , bufin, bufin_size, request->transferred_size);
-
-  return nbytes;
-}
 static int split_request_from_data(struct request_file *request)
 {
   char *begin_data = NULL;
@@ -64,6 +47,53 @@ static int split_request_from_data(struct request_file *request)
   return SUCCESS;
 
 }
+static int get_info_after_end_request(struct request_file *request)
+{
+  if (find_end_request(request->request) != NULL)
+  {
+    check_request_info(request);
+
+    if (request->status == OK)
+    {
+      if (request->method == GET)
+        check_file_ready_to_send(request);
+      else
+        check_file_ready_to_receive(request);
+    }
+
+    if (request->method == GET || request->status  != OK)
+      return READY_TO_SEND;
+
+    split_request_from_data(request);
+    if (request->transferred_size >= request->file_size)
+    {
+      close(request->fd);
+      request->fd = 0;
+      if (request->method == PUT)
+        return ENDED_UPLOAD;
+      return ENDED_DOWNLOAD;
+    }
+
+    return READY_TO_RECEIVE;
+  }
+
+  return ERROR;
+}
+static int check_if_transf_end(struct request_file *request)
+{
+  if ((request->transferred_size >= request->file_size
+       && request->file_size))
+    return SUCCESS;
+  return ERROR;
+}
+static int check_speed_limit(struct request_file* request, long speed_limit)
+{
+  calc_if_sec_had_pass(&request);
+
+  if (request->transf_last_sec < speed_limit)
+    return SUCCESS;
+  return ERROR;
+}
 /*!
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
@@ -79,68 +109,26 @@ int receive_request_from_client(const int socket_id,
   int nbytes = 0, received_size = 0;
   struct request_file *request = NULL;
 
-  request = search_request(socket_id, head);
+  request = search_request_file(socket_id, head);
   if (request == NULL)
-    request = add_request(socket_id, head);
-
-  if ((request->transferred_size >= request->file_size
-      && request->file_size))
-  {
-    close(request->fd);
-    request->fd = 0;
-    return ENDED_UPLOAD;
-  }
-
-  if (find_end_request(request->request))
-    return ERROR;
+    request = add_request_file(socket_id, bufin_size, head);
 
   memset(bufin, 0, bufin_size + 1);
 
-  calc_if_sec_had_pass(&request);
-
-  if (request->transf_last_sec < speed_limit)
-  {
-    nbytes = recv(socket_id, bufin, bufin_size, 0);
-    request->transf_last_sec += nbytes;
-  }
-  else
+  if (check_speed_limit(request,speed_limit))
     return ERROR;
 
-  if (request->request != NULL)
-    received_size = strlen(request->request);
-  else
-    received_size = 0;
+
+  nbytes = recv(socket_id, bufin, bufin_size, 0);
+  request->transf_last_sec += nbytes;
+
+  received_size = (request->request != NULL) ? strlen(request->request): 0;
 
   request->request = realloc(request->request, received_size + nbytes + 1);
   memcpy(request->request + received_size, bufin, nbytes);
   request->request[received_size + nbytes] = '\0';
 
-  if (find_end_request(request->request) != NULL)
-  {
-     check_request_info(request);
-
-     if (request->status == OK)
-     {
-       if (request->method == GET)
-         check_file_ready_to_send(request);
-       else
-         check_file_ready_to_receive(request);
-     }
-    if (request->method == GET || request->status  != OK)
-      return READY_TO_SEND;
-
-    split_request_from_data(request);
-    if (request->transferred_size >= request->file_size)
-    {
-      close(request->fd);
-      request->fd = 0;
-      return ENDED_UPLOAD;
-    }
-
-    return READY_TO_RECEIVE;
-  }
-
-  return ERROR;
+  return get_info_after_end_request(request);
 }
 
 int receive_from_client(const int socket_id,
@@ -149,44 +137,40 @@ int receive_from_client(const int socket_id,
 {
   int bufin_size = calc_buf_size(speed_limit);
   char bufin[BUFSIZE];
-  int nbytes = 0, ret = 0;
+  int nbytes = 0;
   struct request_file *request = NULL;
 
-  request = search_request(socket_id, head);
+  request = search_request_file(socket_id, head);
   if (request == NULL)
-  {
-    ret = receive_request_from_client(socket_id, head, speed_limit);
-    return ret;
-  }
+    return receive_request_from_client(socket_id, head, speed_limit);
 
-  if (request->transf_last_sec < speed_limit)
-  {
-    memset(bufin, 0, bufin_size);
-    if (bufin_size > (request->file_size - request->transferred_size))
-       bufin_size = (request->file_size - request->transferred_size);
-    nbytes = recv(request->socket_id, bufin, bufin_size, 0);
-
-    nbytes = write_file(request, bufin, nbytes);
-    pthread_cond_signal(&cond);
-    if (nbytes <= 0)
-      return ENDED_UPLOAD;
-
-    request->transferred_size += nbytes;
-
-    if (request->transferred_size >= request->file_size)
-      return ENDED_UPLOAD;
-
+  if (check_speed_limit(request, speed_limit))
     return ERROR;
-  }
-  return SUCCESS;
+
+  memset(bufin, 0, bufin_size);
+  if (bufin_size > (request->file_size - request->transferred_size))
+    bufin_size = (request->file_size - request->transferred_size);
+
+  nbytes = recv(request->socket_id, bufin, bufin_size, 0);
+  nbytes = write_file(request, bufin, nbytes);
+
+  if (nbytes <= 0)
+    return ENDED_UPLOAD;
+
+  request->transferred_size += nbytes;
+
+  if (check_if_transf_end(request))
+    return READY_TO_RECEIVE;
+  return ENDED_UPLOAD;
 }
+
 int rename_downloaded_file(struct request_file *request)
 {
   char downloaded_file_name[PATH_MAX];
 
   if (request == NULL)
     return ERROR;
-  
+
   sprintf(downloaded_file_name, "%s~part", request->file_name);
   return rename(downloaded_file_name,request->file_name);
 }
@@ -196,8 +180,7 @@ int rename_downloaded_file(struct request_file *request)
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-static int send_header_to_client( struct request_file **r,
-                                  long speed_limit)
+static int send_header_to_client(struct request_file **r, long speed_limit)
 {
   const int bufin_size = calc_buf_size(speed_limit);
   int send_size = 0, nbytes = 0;
@@ -213,22 +196,17 @@ static int send_header_to_client( struct request_file **r,
 
   send_size = strlen(request->header) - request->header_size_sended;
 
-  if (send_size > bufin_size)
-    send_size =  bufin_size;
+  send_size = (send_size > bufin_size) ? bufin_size : send_size;
 
-  if ((request->transf_last_sec + send_size) < speed_limit)
-  {
-    nbytes = send( request->socket_id,
-                   request->header + request->header_size_sended,
-                   send_size,
-                   MSG_NOSIGNAL);
-
-    if (nbytes <= 0)
-      return SUCCESS;
-
-    request->header_size_sended += nbytes;
+  if (check_speed_limit(request, speed_limit))
     return ERROR;
-  }
+
+  nbytes = send(request->socket_id,
+                request->header + request->header_size_sended,
+                send_size,
+                MSG_NOSIGNAL);
+  if (nbytes > 0)
+    request->header_size_sended += nbytes;
 
   return SUCCESS;
 }
@@ -238,40 +216,147 @@ static int send_header_to_client( struct request_file **r,
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
  * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
  */
-int send_to_client( const int socket_id,
-                    struct request_file **head,
-                    long speed_limit)
+int request_read(const int socket_id,
+                 struct request_file **head,
+                 struct manager_io **manager,
+                 long speed_limit)
 {
-  const int bufin_size = calc_buf_size(speed_limit);
-  int nbytes = 0;
+  int bufin_size = calc_buf_size(speed_limit);
   struct request_file *request = NULL;
-  char bufin[bufin_size];
-  request =  search_request(socket_id, head);
+  struct request_io request_thread;
+
+  request =  search_request_file(socket_id, head);
 
   if (request == NULL)
     return ERROR;
 
-  if (send_header_to_client(&request, speed_limit))
-    return ERROR;
-
-  if (request->transferred_size  >= request->file_size)
+  if (check_if_transf_end(request) == SUCCESS)
     return SUCCESS;
 
-  memset(bufin, 0, bufin_size);
-
-  calc_if_sec_had_pass(&request);
-
-  if ((request->transf_last_sec + bufin_size) > (unsigned) speed_limit)
+  if (send_header_to_client(&request, speed_limit)
+      || request->sended_last_pack == 1)
     return ERROR;
 
-  nbytes = read_file(request, bufin, bufin_size);
-  nbytes = send(socket_id, bufin, nbytes, MSG_NOSIGNAL);
+  memset(&request_thread, 0, sizeof(struct request_io));
 
-  if (nbytes <= 0 )
-    return SUCCESS;
+  if (request->fd <= 0)
+  {
+    request->fd = open(request->file_name,O_RDONLY);
+    if (request->fd <= 0)
+      return ERROR;
+  }
+  request_thread.socket_id = request->socket_id;
+  request_thread.fd = request->fd;
+  request_thread.method = request->method;
+  request_thread.buffer = request->buffer;
+  request_thread.offset = request->transferred_size;
+  request_thread.next = NULL;
+  bufin_size = (bufin_size > (request->file_size - request->transferred_size)
+                ? request->file_size - request->transferred_size : bufin_size);
 
-  request->transferred_size += nbytes;
+  memset(request->buffer, 0, bufin_size);
+  request_thread.size = bufin_size;
+  request->sended_last_pack = 1;
+
+  pthread_mutex_lock(&mutex);
+  enqueue_request_io(manager, &request_thread);
+  pthread_mutex_unlock(&mutex);
+
+
+  pthread_cond_signal(&cond);
+
+  return ERROR;
+}
+int handle_thread_answer(const int local_socket,
+                         struct manager_io **manager_client)
+{
+  struct request_io *request_thread = NULL;
+  int nbytes = 0;
+  int ret = 0;
+  struct timeval tv;
+  fd_set local_fd;
+
+  tv.tv_sec = 0;
+  tv.tv_usec = 10;
+
+  FD_ZERO(&local_fd);
+  FD_SET(local_socket, &local_fd);
+
+  while (1)
+  {
+    ret = select(local_socket + 1, &local_fd, NULL, NULL, &tv);
+    if (ret <= 0)
+      return ERROR;
+
+    memset(&request_thread, 0, sizeof(struct request_io *));
+    nbytes = read (local_socket,
+                   &request_thread,
+                   sizeof(struct request_io *));
+
+    if (nbytes < sizeof(struct request_io *))
+    {
+      fprintf(stderr, "ERRO : socket local!\n");
+      return ERROR;
+    }
+
+    enqueue_request_io(manager_client, request_thread);
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 10;
+
+    free_request_io(&request_thread);
+  }
+  return SUCCESS;
+}
+
+int send_to_client(const int socket_id,
+                   const long speed_limit,
+                   struct manager_io **manager_client,
+                   struct request_file **head)
+{
+  int nbytes = 0;
+  struct request_io *request_client = NULL;
+  struct request_file *request = NULL;
+
+  if ((*manager_client)->total_request <= 0)
+    goto on_error;
+
+  request_client = dequeue_request_io_with_socket_id(socket_id,
+                                                     manager_client);
+  if (request_client == NULL)
+    goto on_error;
+
+  request = search_request_file(socket_id, head);
+  if (request == NULL)
+    goto on_error;
+
+  if (check_speed_limit(request, speed_limit) == ERROR)
+  {
+    enqueue_request_io(manager_client, request_client);
+    goto on_error;
+  }
+
+  nbytes = send(request_client->socket_id,
+                request_client->buffer,
+                request_client->size,
+                MSG_NOSIGNAL);
+
+  if (nbytes < 0 )
+    goto on_error;
+
   request->transf_last_sec += nbytes;
+  request->transferred_size += nbytes;
+  request->sended_last_pack = 0;
+
+  if (check_if_transf_end(request) == SUCCESS)
+  {
+    free_request_io(&request_client);
+    return ENDED_DOWNLOAD;
+  }
+
+  free_request_io(&request_client);
+
+on_error:
   return ERROR;
 }
 /*!
@@ -349,7 +434,7 @@ int check_file_ready_to_receive(struct request_file * request)
 
   if (request->file_name == NULL)
     return ERROR;
-  
+
   getcwd(root_directory,PATH_MAX);
   realpath(request->file_name, abs_path);
 
@@ -375,8 +460,8 @@ int check_file_ready_to_receive(struct request_file * request)
       goto on_error;
     }
     snprintf(file_name_part, strlen(request->file_name) + strlen("~part") + 1,
-            "%s~part", request->file_name);
-    
+             "%s~part", request->file_name);
+
     if (access(file_name_part, F_OK) == 0)
     {
       request->status = CONFLICT;
@@ -437,8 +522,8 @@ int max(const int a , const int b)
 int min(const int a , const int b)
 {
   if (a < b)
-    return (a < 0 ? 0 : a);
-  return (b < 0 ? 0 : b);
+    return (a < 1 ? 1 : a);
+  return (b < 1 ? 1 : b);
 
 }
 /*!
@@ -516,7 +601,7 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
     goto on_error;
 
   if (port_int < 1024 &&  strncmp(argv[0],"sudo", 4))
-      goto on_error;
+    goto on_error;
 
   if (sp_limit)
   {

@@ -27,6 +27,7 @@
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
 #define BUFSIZE 8*KILOBYTE
+
 enum states
 {
   READY_TO_RECEIVE = 1,
@@ -38,12 +39,19 @@ int receive_request_from_client(const int socket_id,
                                 struct request_file **head,
                                 long speed_limit);
 int receive_from_client(const int socket_id,
-                             struct request_file **head,
-                             long speed_limit);
+                        struct request_file **head,
+                        long speed_limit);
 int rename_downloaded_file(struct request_file *request);
-int send_to_client(const int socket_id,
+int request_read(const int socket_id,
                    struct request_file **head,
+                   struct manager_io **manager,
                    long speed_limit);
+int handle_thread_answer(const int local_socket,
+                         struct manager_io **manager_client);
+int send_to_client(const int socket_id,
+                   const long speed_limit,
+                   struct manager_io **manager_client,
+                   struct request_file **head);
 int change_root_directory(const char *root_directory);
 int check_file_ready_to_receive(struct request_file * request);
 int check_file_ready_to_send(struct request_file * request);
