@@ -4,28 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include  <fcntl.h>
+#include <errno.h>
 #include <string.h>
-#define NUM_THREADS  1
-
-struct thread_args
-{
-  int  socket_id;
-  int  quit;
-  char *file_name;
-  char *buffer;
-  long offset;
-  long size;
-  };
+#include "request_lib.h"
+#define MSG_SIZE 128
+#define NUM_THREADS 8
 
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
 extern pthread_t threads[NUM_THREADS];
 
-void init_threads();
+void init_threads(struct manager_io **manager);
 void join_threads();
-void destroy_threads();
-void init_thread_args(struct thread_args *args);
-void create_threads();
-void *thread_func(void *arguments);
+void destroy_threads(struct manager_io **manager);
+void create_threads(struct manager_io **manager);
+void *thread_func(void *args);
 #endif

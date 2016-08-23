@@ -2,24 +2,13 @@
 
 pthread_mutex_t mutex;
 pthread_cond_t cond;
-pthread_t threads[NUM_THREADS];
-pthread_attr_t attr;
+pthread_t threads[NUM_THREADS] = {0};
 
-void init_threads()
+void init_threads(struct manager_io **manager)
 {
   pthread_mutex_init(&mutex, NULL);
   pthread_cond_init (&cond, NULL);
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-}
-void init_thread_args(struct thread_args *args)
-{
-  args->socket_id = 0;
-  args->file_name = NULL;
-  args->offset = 0;
-  args->buffer = NULL;
-  args->size = 0;
-  args->quit = 1;
+  create_threads(manager);
 }
 void join_threads()
 {
@@ -27,30 +16,53 @@ void join_threads()
   for (i = 0; i < NUM_THREADS; i++)
     pthread_join(threads[i],NULL);
 }
-void destroy_threads()
+void destroy_threads(struct manager_io **manager)
 {
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
-  pthread_attr_destroy(&attr);
+  (*manager)->quit = 0;
+  join_threads();
 }
-void create_threads(struct thread_args *args)
+void create_threads(struct manager_io **manager)
 {
-  int i = 0;
+  int i;
   for (i = 0; i < NUM_THREADS; i++)
-    pthread_create(&threads[i], NULL, thread_func, (void *)args);
+    pthread_create(&threads[i], NULL, thread_func, (void *) manager);
 }
-void *thread_func(void *arguments)
+void *thread_func(void *args)
 {
-  struct thread_args *args = (struct thread_args *) arguments;
-  while (args->quit)
+  struct manager_io **manager = (struct manager_io **) args;
+  struct manager_io *m = *manager;
+  struct request_io *request = NULL;
+
+  while (m->quit)
   {
-    char *msg = "shurembos\n"; 
     pthread_mutex_lock(&mutex);
-    pthread_cond_wait(&cond, &mutex);
-    /* FILE IO*/
-    write(args->socket_id, msg, strlen(msg));
-    /* FILE IO*/
-    pthread_mutex_unlock(&mutex);
+
+    while(m->total_request == 0 && m->quit)
+      pthread_cond_wait(&cond, &mutex);
+
+      request = dequeue_request_io(manager);
+      pthread_mutex_unlock(&mutex);
+      if (request == NULL || request->fd == 0)
+        continue;
+
+      if (request->method == GET)
+        request->size = pread(request->fd,
+                              request->buffer,
+                              request->size,
+                              request->offset);
+      else
+        request->size = pwrite(request->fd,
+                               request->buffer,
+                               request->size,
+                               request->offset);
+
+      pthread_mutex_lock(&mutex);
+      fprintf (stderr, "\n --- %s | Total de request: %d --- offset: %ld - Size:%ld\n",
+      strerror(errno), m->total_request, request->offset, request->size);
+      write(m->local_socket, &request, sizeof(struct request_io*));
+      pthread_mutex_unlock(&mutex);
   }
   pthread_exit(NULL);
 }
