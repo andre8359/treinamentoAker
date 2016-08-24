@@ -23,7 +23,6 @@ int main(int argc,  char *argv[])
   int max_socket = FD_SETSIZE;
   int min_socket = 0;
   int ret = 0;
-  int buf_size = 0;
   int fd[] = {0, 0};
   long speed_limit = 0;
   long port = 0;
@@ -44,8 +43,6 @@ int main(int argc,  char *argv[])
 
   if (speed_limit == 0)
     speed_limit = LONG_MAX;
-
-  buf_size = calc_buf_size(speed_limit);
 
   server_socket = make_connection(port);
 
@@ -109,47 +106,60 @@ int main(int argc,  char *argv[])
         }
         else if (i == local_socket)
         {
-          ret = handle_thread_answer(local_socket, &manager_client);
+          ret = handle_thread_answer(local_socket, &head, &manager_client);
+
+          if(ret > 0)
+          {
+            request = search_request_file(ret, &head);
+
+            if (request->fd)
+              close(request->fd);
+            request->fd = 0;
+            request->method = GET;
+            request->transferred_size = 0;
+            request->status = CREATED;
+            rename_downloaded_file(request);
+
+            set_std_response(request);
+            FD_SET(ret, &active_write_fd_set);
+            FD_CLR(ret, &active_read_fd_set);
+          }
+          else if (ret == ERROR)
+          {
+            request = search_request_file(ret, &head);
+            if (request->fd)
+              close(request->fd);
+            request->method = GET;
+            request->status = INTERNAL_ERROR;
+            set_std_response(request);
+            FD_SET(ret, &active_write_fd_set);
+            FD_CLR(ret, &active_read_fd_set);
+          }
           continue;
         }
 
-        ret = receive_from_client(i, &head, speed_limit);
+        ret = receive_from_client(i, &head, &manager_thread, speed_limit);
         if (ret == READY_TO_SEND)
         {
           FD_SET(i, &active_write_fd_set);
           FD_CLR(i, &active_read_fd_set);
         }
-        else if(ret == ENDED_UPLOAD)
-        {
-          request = search_request_file(i, &head);
-          if (request->fd)
-            close(request->fd);
-          rename_downloaded_file(request);
-          request->status = CREATED;
-          set_std_response(request);
-          FD_SET(i, &active_write_fd_set);
-          FD_CLR(i, &active_read_fd_set);
-        }
-        else if (ret == ERROR)
-        {
-          rm_request_file(i, &head);
-          FD_CLR(i, &active_read_fd_set);
-        }
       }
       else if (FD_ISSET(i, &write_fd_set))
       {
-        ret = send_to_client(i, speed_limit, &manager_client, &head);
+        send_to_client(i, speed_limit, &manager_client, &head);
+        ret = request_read(i, &head, &manager_thread, speed_limit);
+
         if (ret == ENDED_DOWNLOAD)
         {
           rm_request_file(i, &head);
           FD_CLR(i, &active_write_fd_set);
-          continue;
         }
-        ret = request_read(i, &head, &manager_thread, speed_limit);
       }
     }
     gettimeofday(&time_waiting, NULL);
-    if (head && (head->transf_last_sec + buf_size) > speed_limit)
+    if (head 
+        && (check_speed_limit(head, speed_limit) == ERROR))
       usleep(1e6 - (time_waiting.tv_usec - head->last_pack.tv_usec));
   }
 
@@ -158,7 +168,7 @@ on_error:
   {
     manager_thread->quit = 0;
     pthread_cond_broadcast(&cond);
-    destroy_threads(&manager_thread);
+    destroy_threads();
 
     free_request_io_list(&manager_thread);
 
@@ -167,6 +177,7 @@ on_error:
 
     free(manager_thread);
   }
+
   if (manager_client)
   {
     if (manager_client->head)
