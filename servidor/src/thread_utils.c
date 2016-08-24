@@ -58,9 +58,9 @@ void *thread_func(void *args)
                                request->offset);
 
       pthread_mutex_lock(&mutex);
-      fprintf (stderr, "\n Thread[%ld]--- %s | Total de request: %d --- offset: %ld - Size:%ld\n",
-      pthread_self(),
-      strerror(errno), m->total_request, request->offset, request->size);
+     // fprintf (stderr, "\n Thread[%ld]--- %s | Total de request: %d --- offset: %ld - Size:%ld\n",
+      //pthread_self(),
+      //strerror(errno), m->total_request, request->offset, request->size);
       write(m->local_socket, &request, sizeof(struct request_io*));
       pthread_mutex_unlock(&mutex);
   }

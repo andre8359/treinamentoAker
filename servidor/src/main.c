@@ -144,6 +144,14 @@ int main(int argc,  char *argv[])
           FD_SET(i, &active_write_fd_set);
           FD_CLR(i, &active_read_fd_set);
         }
+        else if(ret == ENDED_UPLOAD)
+        {
+          request = search_request_file(i, &head);
+          delete_uncompleted_downloaded_file(request);
+          rm_request_file(i, &head);
+          FD_CLR(i, &active_write_fd_set);
+          FD_CLR(i, &active_read_fd_set);
+        }
       }
       else if (FD_ISSET(i, &write_fd_set))
       {
@@ -166,7 +174,10 @@ int main(int argc,  char *argv[])
 on_error:
   if (manager_thread)
   {
+    pthread_mutex_lock(&mutex);
     manager_thread->quit = 0;
+    pthread_mutex_unlock(&mutex);
+
     pthread_cond_broadcast(&cond);
     destroy_threads();
 

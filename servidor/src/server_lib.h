@@ -35,18 +35,24 @@ enum states
   ENDED_DOWNLOAD,
   ENDED_UPLOAD
 };
+
+int check_speed_limit(struct request_file* request, long speed_limit);
 int receive_request_from_client(const int socket_id,
                                 struct request_file **head,
+                                struct manager_io **manager,
                                 long speed_limit);
 int receive_from_client(const int socket_id,
                         struct request_file **head,
+                        struct manager_io **manager,
                         long speed_limit);
 int rename_downloaded_file(struct request_file *request);
+int delete_uncompleted_downloaded_file(struct request_file *request);
 int request_read(const int socket_id,
                    struct request_file **head,
                    struct manager_io **manager,
                    long speed_limit);
 int handle_thread_answer(const int local_socket,
+                         struct request_file **head,
                          struct manager_io **manager_client);
 int send_to_client(const int socket_id,
                    const long speed_limit,
