@@ -26,7 +26,7 @@ struct request_file
   int  fd;
   int status;
   int method;
-  char *buffer;
+  char buffer[BUFSIZE];
   char *file_name;
   char *header;
   char *request;
@@ -60,7 +60,6 @@ struct manager_io
 };
 
 struct request_file *add_request_file(const int socket_id,
-                                      const int buffer_size,
                                       struct request_file **head);
 int rm_request_file(const int socket_id, struct request_file **head);
 struct request_file *search_request_file(const int socket_id,

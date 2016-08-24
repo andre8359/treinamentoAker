@@ -15,7 +15,6 @@
  *  sucesso.
  */
 struct request_file *add_request_file(const int socket_id,
-                                      const int buffer_size,
                                       struct request_file **head)
 {
   struct request_file *aux;
@@ -25,7 +24,6 @@ struct request_file *add_request_file(const int socket_id,
     *head = (struct request_file *) calloc (1, sizeof(struct request_file));
     (*head)->socket_id = socket_id;
 
-    (*head)->buffer = (char *) calloc (1, buffer_size);
     return *head;
   }
 
@@ -36,7 +34,6 @@ struct request_file *add_request_file(const int socket_id,
 
   struct request_file *new_request =
     (struct request_file *) calloc(1, sizeof(struct request_file));
-  new_request->buffer = (char *) calloc (1, buffer_size);
   new_request->socket_id = socket_id;
 
   new_request->prev = aux;
@@ -52,7 +49,6 @@ struct request_file *add_request_file(const int socket_id,
  */
 static void free_request_file(struct request_file **r)
 {
-  free((*r)->buffer);
   free((*r)->file_name);
   free((*r)->request);
   free((*r)->header);
