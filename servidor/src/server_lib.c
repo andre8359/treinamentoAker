@@ -12,7 +12,7 @@ static int prepare_request_io(struct request_file *request,
 {
   const int file_name_size = strlen(request->request);
   char file_name[file_name_size];
-  
+
   if (request->fd <= 0)
   {
     if (request->method == GET)
@@ -20,35 +20,32 @@ static int prepare_request_io(struct request_file *request,
       request->fd = open(request->file_name,O_RDONLY);
       if (request->fd <= 0)
         return ERROR;
-      
-      memset(request->buffer, 0, buf_size);
+      memset(request->buffer, 0, BUFSIZE);
     }
     else
     {
       snprintf(file_name, file_name_size, "%s~part", request->file_name);
-      
+
       request->fd = open(file_name,O_WRONLY|O_CREAT, S_IRUSR | S_IWUSR);
       if (request->fd <= 0)
         return ERROR;
     }
   }
-
   request_thread->socket_id = request->socket_id;
   request_thread->fd = request->fd;
   request_thread->method = request->method;
   request_thread->buffer = request->buffer;
   request_thread->offset = request->transferred_size;
   request_thread->next = NULL;
-
   buf_size = (buf_size > (request->file_size - request->transferred_size)
               ? request->file_size - request->transferred_size : buf_size);
 
   request_thread->size = buf_size;
   request->sended_last_pack = 1;
-  
+
   return SUCCESS;
 }
-static int split_request_from_data(struct request_file *request, 
+static int split_request_from_data(struct request_file *request,
                                    struct manager_io **manager)
 {
   char *begin_data = NULL;
@@ -104,8 +101,7 @@ static int get_info_after_end_request(struct request_file *request,
 }
 static int check_if_transf_end(struct request_file *request)
 {
-  if ((request->transferred_size >= request->file_size
-       && request->file_size))
+  if ((request->transferred_size >= request->file_size && request->file_size))
     return SUCCESS;
   return ERROR;
 }
@@ -119,6 +115,77 @@ int check_speed_limit(struct request_file* request, long speed_limit)
   return ERROR;
 }
 
+static int rename_downloaded_file(struct request_file *request)
+{
+  char downloaded_file_name[PATH_MAX];
+
+  if (request == NULL)
+    return ERROR;
+
+  sprintf(downloaded_file_name, "%s~part", request->file_name);
+  return rename(downloaded_file_name, request->file_name);
+}
+static int delete_uncompleted_downloaded_file(struct request_file *request)
+{
+
+  char downloaded_file_name[PATH_MAX];
+
+  if (request == NULL)
+    return ERROR;
+
+  sprintf(downloaded_file_name, "%s~part", request->file_name);
+  return unlink(downloaded_file_name);
+}
+static struct request_file *set_method_equals_get(const int socket_id,
+                                                  struct request_file **head)
+{
+  struct request_file *request = NULL;
+
+  request = search_request_file(socket_id, head);
+  if (request == NULL)
+    return NULL;
+
+  if (request->fd)
+    close(request->fd);
+
+  request->method = GET;
+  return request;
+}
+
+static int check_if_file_is_forbidden(char *file_name)
+{
+  char root_directory[PATH_MAX];
+  char abs_path[ PATH_MAX];
+
+  getcwd(root_directory,PATH_MAX);
+  realpath(file_name, abs_path);
+
+  if (strstr(abs_path, root_directory) == NULL)
+    return ERROR;
+  return SUCCESS;
+}
+static int check_if_can_read_write_file(char *file_name, int flag)
+{
+  if (access(file_name, flag) < 0)
+    return ERROR;
+  return SUCCESS;
+}
+
+static int check_if_is_directory(char *path_file)
+{
+  struct stat path_stat;
+
+  stat(path_file, &path_stat);
+  if (S_ISDIR(path_stat.st_mode))
+    return ERROR;
+  return SUCCESS;
+}
+static int check_if_file_exists(char *file_name)
+{
+  if (access(file_name, F_OK) != -1 )
+    return SUCCESS;
+  return ERROR;
+}
 /*!
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
@@ -147,6 +214,9 @@ int receive_request_from_client(const int socket_id,
 
 
   nbytes = recv(socket_id, bufin, bufin_size, 0);
+  if (nbytes <= 0)
+    return ENDED_DOWNLOAD_UNCOMPLETED;
+
   request->transf_last_sec += nbytes;
 
   received_size = (request->request != NULL) ? strlen(request->request) : 0;
@@ -174,51 +244,31 @@ int receive_from_client(const int socket_id,
 
   if (check_if_transf_end(request) == SUCCESS)
     return ENDED_UPLOAD;
-  
+
   if (check_speed_limit(request, speed_limit) || request->sended_last_pack)
     return ERROR;
 
   memset(request->buffer, 0, buf_size);
-  
+
   buf_size = (buf_size > (request->file_size - request->transferred_size)) ?
-             (request->file_size - request->transferred_size) : buf_size ;
+    (request->file_size - request->transferred_size) : buf_size ;
 
   nbytes = recv(request->socket_id, request->buffer, buf_size, 0);
   if (nbytes <= 0)
-    return ENDED_UPLOAD;
+    return ENDED_UPLOAD_UNCOMPLETED;
 
   prepare_request_io(request, &request_thread, nbytes);
-    
+
   pthread_mutex_lock(&mutex);
   enqueue_request_io(manager, &request_thread);
   pthread_mutex_unlock(&mutex);
-  
-  pthread_cond_signal(&cond);
+
+  if ((*manager)->total_request != 0)
+    pthread_cond_signal(&cond);
 
   return READY_TO_RECEIVE;
 }
 
-int rename_downloaded_file(struct request_file *request)
-{
-  char downloaded_file_name[PATH_MAX];
-
-  if (request == NULL)
-    return ERROR;
-
-  sprintf(downloaded_file_name, "%s~part", request->file_name);
-  return rename(downloaded_file_name, request->file_name);
-}
-int delete_uncompleted_downloaded_file(struct request_file *request)
-{
-
-  char downloaded_file_name[PATH_MAX];
-
-  if (request == NULL)
-    return ERROR;
-
-  sprintf(downloaded_file_name, "%s~part", request->file_name);
-  return unlink(downloaded_file_name);
-}
 /*!
  * \brief Envia header pro cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
@@ -232,9 +282,7 @@ static int send_header_to_client(struct request_file **r, long speed_limit)
   struct request_file *request = *r;
 
   if (request->header == NULL)
-    request->header = make_header( request->file_name,
-                                   request->status,
-                                   &(request->file_size));
+    request->header = make_header(request);
 
   if ((unsigned)request->header_size_sended >= strlen(request->header))
     return SUCCESS;
@@ -250,7 +298,7 @@ static int send_header_to_client(struct request_file **r, long speed_limit)
                 request->header + request->header_size_sended,
                 send_size,
                 MSG_NOSIGNAL);
-  
+
   if (nbytes > 0)
     request->header_size_sended += nbytes;
 
@@ -291,8 +339,8 @@ int request_read(const int socket_id,
   enqueue_request_io(manager, &request_thread);
   pthread_mutex_unlock(&mutex);
 
-
-  pthread_cond_signal(&cond);
+  if ((*manager)->total_request != 0)
+    pthread_cond_signal(&cond);
 
   return ERROR;
 }
@@ -318,7 +366,7 @@ int handle_thread_answer(const int local_socket,
     ret = select(local_socket + 1, &local_fd, NULL, NULL, &tv);
     if (ret < 0)
       return ERROR;
-    
+
     if (ret == 0)
       break;
 
@@ -343,15 +391,16 @@ int handle_thread_answer(const int local_socket,
       request->transf_last_sec += request_thread->size;
       request->transferred_size += request_thread->size;
       request->sended_last_pack = 0;
+
       if (check_if_transf_end(request) == SUCCESS)
       {
         free_request_io(&request_thread);
         return request->socket_id;
       }
-    } 
+    }
 
     free_request_io(&request_thread);
-    
+
     tv.tv_sec = 0;
     tv.tv_usec = 0;
   }
@@ -390,8 +439,8 @@ int send_to_client(const int socket_id,
                 request_client->size,
                 MSG_NOSIGNAL);
 
-  if (nbytes < 0 )
-   return ENDED_DOWNLOAD;;
+  if (nbytes <= 0 )
+    return ENDED_DOWNLOAD_UNCOMPLETED;
 
   request->transf_last_sec += nbytes;
   request->transferred_size += nbytes;
@@ -406,6 +455,51 @@ on_error:
   if (request_client)
     free_request_io(&request_client);
   return ERROR;
+}
+
+int handle_uncompleted_transf(const int socket_id, struct request_file **head)
+{
+  struct request_file *request = NULL;
+
+  request = search_request_file(socket_id, head);
+  if (request == NULL)
+    return ERROR;
+
+  delete_uncompleted_downloaded_file(request);
+  rm_request_file(socket_id, head);
+  return SUCCESS;
+}
+int handle_end_upload(const int socket_id, struct request_file **head)
+{
+  struct request_file *request = NULL;
+
+  request = set_method_equals_get(socket_id, head);
+  if (request == NULL)
+    return ERROR;
+
+  request->transferred_size = 0;
+  memset(request->buffer, 0, BUFSIZE);
+
+  if (check_if_file_exists(request->file_name) == SUCCESS)
+    request->status = OK;
+  else
+    request->status = CREATED;
+
+  rename_downloaded_file(request);
+
+  set_std_response(request);
+  return SUCCESS;
+}
+int handle_server_error(const int socket_id, struct request_file **head)
+{
+  struct request_file *request = NULL;
+  request = set_method_equals_get(socket_id, head);
+  if (request == NULL)
+    return ERROR;
+
+  request->status = INTERNAL_ERROR;
+  set_std_response(request);
+  return SUCCESS;
 }
 /*!
  * \brief Change the current working directoy
@@ -429,37 +523,26 @@ int change_root_directory(const char *root_directory)
  */
 int check_file_ready_to_send(struct request_file * request)
 {
-  char root_directory[PATH_MAX];
-  char abs_path[PATH_MAX];
-  struct stat path_stat;
-
   if (request->file_name == NULL)
     return ERROR;
-
-  if (access(request->file_name, F_OK) != -1 )
-  {
-    stat(request->file_name, &path_stat);
-    if (S_ISDIR(path_stat.st_mode))
-    {
-      request->status = BAD_REQUEST;
-      goto on_error;
-    }
-    getcwd(root_directory,PATH_MAX);
-    realpath(request->file_name, abs_path);
-    if (strstr(abs_path, root_directory) == NULL)
-    {
-      request->status = FORBIDDEN;
-      goto on_error;
-    }
-    if (access(request->file_name, R_OK) < 0)
-    {
-      request->status = UNAUTHORIZED;
-      goto on_error;
-    }
-  }
-  else
+  if (check_if_file_exists(request->file_name))
   {
     request->status = NOT_FOUND;
+    goto on_error;
+  }
+  if (check_if_is_directory(request->file_name))
+  {
+    request->status = BAD_REQUEST;
+    goto on_error;
+  }
+  if (check_if_file_is_forbidden(request->file_name))
+  {
+    request->status = FORBIDDEN;
+    goto on_error;
+  }
+  if (check_if_can_read_write_file(request->file_name, R_OK))
+  {
+    request->status = UNAUTHORIZED;
     goto on_error;
   }
   return SUCCESS;
@@ -474,58 +557,52 @@ on_error:
  */
 int check_file_ready_to_receive(struct request_file * request)
 {
-  char root_directory[PATH_MAX];
-  char abs_path[PATH_MAX];
   char file_name_part[PATH_MAX];
-  char *last_slash = NULL; 
-  struct stat path_stat;
-
-  memset(&path_stat,0,sizeof(path_stat));
+  char *last_slash = NULL;
+  char abs_path[PATH_MAX];
 
   if (request->file_name == NULL)
     return ERROR;
 
-  getcwd(root_directory,PATH_MAX);
-  realpath(request->file_name, abs_path);
-
-  if (strstr(abs_path, root_directory) == NULL)
+  if (check_if_file_is_forbidden(request->file_name))
   {
     request->status = FORBIDDEN;
     goto on_error;
   }
+
+  realpath(request->file_name, abs_path);
   last_slash = strrchr(abs_path,'/');
   memset(last_slash, 0, strlen(last_slash));
-  if (access(abs_path, F_OK) != -1 )
-  {
-    stat(request->file_name, &path_stat);
-    if (S_ISDIR(path_stat.st_mode))
-    {
-      request->status = BAD_REQUEST;
-      goto on_error;
-    }
 
-    if (access(abs_path, W_OK) < 0)
-    {
-      request->status = UNAUTHORIZED;
-      goto on_error;
-    }
-    snprintf(file_name_part, strlen(request->file_name) + strlen("~part") + 1,
-             "%s~part", request->file_name);
-
-    if (access(file_name_part, F_OK) == 0)
-    {
-      request->status = CONFLICT;
-      goto on_error;
-    }
-  }
-  else
+  if (check_if_file_exists(abs_path))
   {
     request->status = FORBIDDEN;
+    goto on_error;
+  }
+
+  if (check_if_is_directory(request->file_name))
+  {
+    request->status = BAD_REQUEST;
+    goto on_error;
+  }
+
+  if (check_if_can_read_write_file(abs_path, W_OK))
+  {
+    request->status = UNAUTHORIZED;
+    goto on_error;
+  }
+  snprintf(file_name_part, strlen(request->file_name) + strlen("~part") + 1,
+           "%s~part", request->file_name);
+
+  if (check_if_file_exists(file_name_part) == SUCCESS)
+  {
+    request->status = CONFLICT;
     goto on_error;
   }
 
   return SUCCESS;
 on_error:
+  request->method = GET;
   set_std_response(request);
   return ERROR;
 }
@@ -659,8 +736,8 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
 
     *speed_limit = strtol(sp_limit, &end, base);
 
-    if ((errno == ERANGE && (*speed_limit == LONG_MAX 
-                             || *speed_limit == LONG_MIN)) 
+    if ((errno == ERANGE && (*speed_limit == LONG_MAX
+                             || *speed_limit == LONG_MIN))
                              || (*speed_limit <= 0))
       goto on_error;
 
@@ -688,19 +765,20 @@ on_error:
  */
 void calc_if_sec_had_pass(struct request_file **r)
 {
-  struct timeval now;
-  double sec = 0;
+  struct request_file *request = *r;
+  struct timeval now, result;
 
-  if ((*r)->last_pack.tv_sec == 0 && (*r)->last_pack.tv_usec == 0)
-    gettimeofday(&((*r)->last_pack), NULL);
+  if (request->last_pack.tv_sec == 0 && request->last_pack.tv_usec == 0)
+    gettimeofday(&(request->last_pack), NULL);
 
   gettimeofday(&now, NULL);
-  sec = (now.tv_sec - (*r)->last_pack.tv_sec);
 
-  if (sec >= 1)
+  diff_time(&result, &(request->last_pack), &now);
+
+  if (result.tv_usec > SECOND_TO_MICROSEC)
   {
-    (*r)->transf_last_sec = 0;
-    gettimeofday(&((*r)->last_pack), NULL);
+    request->transf_last_sec = 0;
+    gettimeofday(&(request->last_pack), NULL);
   }
 }
 /*!
@@ -713,7 +791,14 @@ int calc_buf_size(long speed_limit)
   if (speed_limit >= BUFSIZE)
     return BUFSIZE;
   else if (speed_limit != 0)
-    return (long) speed_limit;
+    return (int) speed_limit;
   else
     return ERROR;
+}
+int diff_time(struct timeval *result, struct timeval *x, struct timeval *y)
+{
+  result->tv_sec = 0;
+  result->tv_usec = ((y->tv_sec * SECOND_TO_MICROSEC) + y->tv_usec)
+                    - ((x->tv_sec * SECOND_TO_MICROSEC) + x->tv_usec);
+  return result->tv_usec < 0;
 }
