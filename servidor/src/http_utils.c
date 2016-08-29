@@ -7,7 +7,8 @@
 #include "http_utils.h"
 
 /* Resposta padrao */
-const char *status_conection [] = {
+const char *status_conection[] =
+{
   "HTTP/1.0 200 OK\r\n",
   "HTTP/1.0 201 Created\r\n",
   "HTTP/1.0 400 Bad Request\r\n",
@@ -20,8 +21,9 @@ const char *status_conection [] = {
 };
 
 /* Mensagens de respota padrao*/
-const char *messages_status [] ={
-  "",
+const char *messages_status[] =
+{
+  "<h1> 200 - OK </h1>",
   "<html>\n"
     " <body>\n"
     "  <h1>Created</h1>\n"
@@ -48,8 +50,9 @@ const char *messages_status [] ={
 };
 
 /*Nomes do arquivos com html das respostas padao.*/
-const char  *std_response_file_names[] = {
-  "",
+const char  *std_response_file_names[] =
+{
+  "ok.html",
   "created.html",
   "bad_request.html",
   "unauthorized.html",
@@ -66,6 +69,7 @@ static void get_request_info(struct request_file *request);
 static char *set_content_type(const char *file_name);
 static char *set_content_length(const char *file_name, long *file_size);
 static char *get_date();
+static char *str_dup(const char *str);
 /*!
  * \brief Encontra fim de requisicao.
  * \param[in] request String que representa a requisicao.
@@ -76,7 +80,7 @@ static char *get_date();
 char *find_end_request(char *request)
 {
   char *ch = NULL;
-  
+
   if (request == NULL)
     return NULL;
 
@@ -107,8 +111,8 @@ void check_request_info(struct request_file *request)
   return;
 
 on_error:
- request->status = BAD_REQUEST;
- set_std_response(request);
+  request->status = BAD_REQUEST;
+  set_std_response(request);
 }
 /*!
  * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
@@ -121,10 +125,10 @@ static void get_request_info(struct request_file *request)
   char file_path[PATH_MAX];
   const int command_size = 5, http_version_size = 10;
   char command[command_size], http_version[http_version_size];
-  
-  memset(file_path, 0, PATH_MAX); 
-  memset(command, 0, command_size); 
-  memset(http_version, 0, http_version_size); 
+
+  memset(file_path, 0, PATH_MAX);
+  memset(command, 0, command_size);
+  memset(http_version, 0, http_version_size);
 
   sscanf(request->request,"%4s %s %9s\r\n\r\n %*[^|]",command, file_path,
          http_version);
@@ -180,8 +184,17 @@ static char *get_file_name(char *input_path)
 
   return ret;
 }
+char *str_dup(const char *str)
+{
+  char *dup = calloc(strlen(str) + 1, sizeof(char));
+
+  if (dup != NULL)
+    strcpy(dup, str);
+
+  return dup;
+}
 /*!
- * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad 
+ * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad
  *  Request, Not Foud, etc).
  * \param p Estrutura que contem as informacoes sobre a requisicao.
  * \return Retona 0 em caso de suceso ou -1 em caso de falha.
@@ -190,7 +203,9 @@ int set_std_response(struct request_file *r)
 {
   struct stat st;
   free(r->file_name);
-  r->file_name = strdup(std_response_file_names[r->status  - 1]);
+  r->file_name = NULL;
+
+  r->file_name = str_dup(std_response_file_names[r->status - 1]);
 
   stat(r->file_name, &st);
   if (st.st_size > 0)
@@ -202,26 +217,27 @@ int set_std_response(struct request_file *r)
   }
   return SUCCESS;
 }
-char *make_header(const char *file_name, const int status,
-                  long *file_size)
+char *make_header(struct request_file *request)
 {
   const char server[] = "Server: Cacique/0.0.1\r\n";
   const int end_header_len = 2;
-  char *content_length = set_content_length(file_name, file_size);
+  char *content_length = set_content_length(request->file_name,
+                                            &(request->file_size));
   char *date = get_date();
-  char *content_type = set_content_type(file_name);
+  char *content_type = set_content_type(request->file_name);
   char connection_status[] = "Connection: Close\r\n";
-  int header_size = strlen(status_conection[status])
-                    + strlen(content_type)+1
-                    + strlen(content_length) + 1
-                    + strlen(date) + 1
-                    + strlen(server)+ 1
-                    + end_header_len
-                    + strlen(connection_status);
+  int header_size = strlen(status_conection[request->status])
+    + strlen(content_type)+1
+    + strlen(content_length) + 1
+    + strlen(date) + 1
+    + strlen(server)+ 1
+    + end_header_len
+    + strlen(connection_status);
 
-  char *header = (char *) malloc (header_size * sizeof(char));
+  char *header = (char *) calloc (header_size + 1, sizeof(char));
 
-  snprintf(header, header_size, "%s%s%s%s%s%s\r\n", status_conection[status-1],
+  snprintf(header, header_size, "%s%s%s%s%s%s\r\n",
+           status_conection[request->status-1],
            content_type, content_length,connection_status,date,server);
 
   free(content_length);
@@ -235,9 +251,11 @@ static char *set_content_length(const char *file_name, long *file_size)
   struct stat st;
   const int length_value = 12; /*Terabytes 2^12*/
   const int content_len_size = strlen( "Content-Length: \r\n") + length_value;
-  char *content_length = (char *) malloc (content_len_size * sizeof(char));
+  char *content_length = (char *) calloc (content_len_size, sizeof(char));
+
   if (content_length == NULL)
     return content_length;
+
   stat(file_name, &st);
   if (st.st_size < 0)
   {
@@ -310,7 +328,7 @@ int create_default_response_files()
 {
   FILE *fp = NULL;
   int i;
-  for (i = CREATED; i < LAST_STATUS; i++)
+  for (i = OK; i < LAST_STATUS; i++)
   {
     fp = fopen(std_response_file_names[i-1], "w");
     if (fp == NULL)

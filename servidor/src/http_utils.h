@@ -24,8 +24,7 @@ enum status_conection
 };
 char *find_end_request(char *header);
 void check_request_info(struct request_file *request);
-char *make_header(const char *file_name, const int status,
-                  long *file_size);
+char *make_header(struct request_file *request);
 int create_default_response_files();
 int set_std_response(struct request_file *r);
 #endif /* SERVER_LIB_H */
