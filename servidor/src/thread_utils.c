@@ -16,8 +16,13 @@ void join_threads()
   for (i = 0; i < NUM_THREADS; i++)
     pthread_join(threads[i],NULL);
 }
-void destroy_threads()
+void destroy_threads(struct manager_io ** manager)
 {
+  pthread_mutex_lock(&mutex);
+  (*manager)->quit = 0;
+  pthread_mutex_unlock(&mutex);
+
+  pthread_cond_broadcast(&cond);
   join_threads();
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
@@ -58,9 +63,6 @@ void *thread_func(void *args)
                                request->offset);
 
       pthread_mutex_lock(&mutex);
-     // fprintf (stderr, "\n Thread[%ld]--- %s | Total de request: %d --- offset: %ld - Size:%ld\n",
-      //pthread_self(),
-      //strerror(errno), m->total_request, request->offset, request->size);
       write(m->local_socket, &request, sizeof(struct request_io*));
       pthread_mutex_unlock(&mutex);
   }

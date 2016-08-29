@@ -7,8 +7,8 @@
 #include <errno.h>
 #include <string.h>
 #include "request_lib.h"
-#define MSG_SIZE 128
-#define NUM_THREADS 8
+
+#define NUM_THREADS 4
 
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
