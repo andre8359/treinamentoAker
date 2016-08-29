@@ -1,4 +1,3 @@
-
 #include "socket_utils.h"
 /*!
  * \brief Cria um socket.
@@ -7,13 +6,14 @@
  * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
-int create_socket(const struct sockaddr_in *p)
+int create_socket(int family, int type)
 {
   int socket_id = 0;
-
-  if ((socket_id = socket(p->sin_family, SOCK_STREAM, 0)) == -1)
+  int yes = 1;
+  if ((socket_id = socket(family, type, 0)) < 0)
     return ERROR;
-
+  if (setsockopt(socket_id, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) <  0)
+    return ERROR;
   return socket_id;
 }
 /*!
@@ -21,7 +21,7 @@ int create_socket(const struct sockaddr_in *p)
  */
 void config_connection(const long port, struct sockaddr_in *serv_info)
 {
-  serv_info->sin_family = AF_INET;
+  serv_info->sin_family = PF_INET;
   serv_info->sin_addr.s_addr = INADDR_ANY;
   serv_info->sin_port = htons(port);
 }
@@ -33,24 +33,28 @@ void config_connection(const long port, struct sockaddr_in *serv_info)
  * caso de
  *  falha.
  */
-int make_connection(const long port)
+int make_listening_socket(const long port)
 {
   struct sockaddr_in serv_info;
   int socket_id = 0;
   socklen_t len = 0;
+
   memset(&serv_info, 0, sizeof(serv_info));
+
   config_connection(port, &serv_info);
-  socket_id = create_socket(&serv_info);
+
+  socket_id = create_socket(serv_info.sin_family, SOCK_STREAM);
 
   if (socket_id < 0)
     return ERROR;
 
   len = sizeof(serv_info);
 
-  if (bind(socket_id, (struct sockaddr *)
-           &serv_info, len) < 0)
+  if (bind(socket_id, (struct sockaddr *) &serv_info, len) < 0)
     return ERROR;
 
+  if (listen(socket_id, BACKLOG) < 0)
+    return ERROR;
   return socket_id;
 }
 /*!
@@ -68,8 +72,7 @@ int accept_new_connection(const int socket_id)
 
   client_len = sizeof (client_info);
   new_socket_id = accept (socket_id,
-                          (struct sockaddr
-                           *)&client_info,
+                          (struct sockaddr*)&client_info,
                           &client_len);
   if (new_socket_id < 0)
     return ERROR;
@@ -81,10 +84,24 @@ int accept_new_connection(const int socket_id)
   return new_socket_id;
 }
 
-int make_local_socket (int *fd)
+int make_local_socket(char *socket_name, int socket_name_size)
 {
+  struct sockaddr_un client_addr;
+  int socket_id = 0;
   int ret = 0;
 
-  ret = socketpair(AF_UNIX, SOCK_DGRAM, 0, fd);
-  return ret;
+  bzero((char *) &client_addr, sizeof(client_addr));
+
+  client_addr.sun_family = PF_LOCAL;
+  strncpy(client_addr.sun_path, socket_name, socket_name_size );
+
+  socket_id = create_socket(client_addr.sun_family, SOCK_DGRAM);
+  if (socket_id <= 0)
+    return ERROR;
+
+  ret = bind(socket_id, (struct sockaddr *) &client_addr, sizeof(client_addr));
+  if (ret < 0)
+    return ERROR;
+
+  return socket_id;
 }

@@ -11,18 +11,15 @@
 #include <sys/un.h>
 #include <stddef.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <errno.h>
 #define ERROR -1
 #define SUCCESS 0
-#define SERVER_IP "127.0.0.1"
+#define CLIENT_LOCAL_SOCKET_NAME "/tmp/client-socket"
+#define SERVER_LOCAL_SOCKET_NAME "/tmp/server-socket"
 #define BACKLOG FD_SETSIZE
-#define KILOBYTE 1024
-#define MEGABYTE 1024 * KILOBYTE
-#define GIGABYTE 1024 * MEGABYTE
-#define BUFSIZE 8*KILOBYTE
-int create_socket(const struct sockaddr_in *p);
+int create_socket(int family, int type);
 void config_connection(const long port, struct sockaddr_in *serv_info);
-int make_connection(const long port);
+int make_listening_socket(const long port);
 int accept_new_connection(const int socket_id);
-int make_local_socket (int *fd);
+int make_local_socket(char *socket_name, int socket_name_size);
 #endif
