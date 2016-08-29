@@ -10,8 +10,11 @@
 #define PATH_MAX 4096
 #define ERROR -1
 #define SUCCESS 0
+#define SECOND_TO_MICROSEC 1000000L
 #define KILOBYTE 1024
-#define BUFSIZE 8*KILOBYTE
+#define MEGABYTE 1024 * KILOBYTE
+#define GIGABYTE 1024 * MEGABYTE
+#define BUFSIZE 8 * KILOBYTE
 
 enum method
 {
@@ -64,6 +67,7 @@ struct request_file *add_request_file(const int socket_id,
 int rm_request_file(const int socket_id, struct request_file **head);
 struct request_file *search_request_file(const int socket_id,
                                     struct request_file **head);
+
 void free_request_file_list(struct request_file **head);
 void print_request_file_list(struct request_file **head);
 

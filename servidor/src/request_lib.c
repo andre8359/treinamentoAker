@@ -119,7 +119,7 @@ int rm_request_file(const int socket_id, struct request_file **head)
  * \return  NULL em caso de erro ou um ponteiro para requisicao em caso de
  *  sucesso.
  */
-struct request_file* search_request_file(const int socket_id,
+struct request_file *search_request_file(const int socket_id,
                                          struct request_file **head)
 {
   struct request_file *aux;
@@ -193,7 +193,7 @@ struct request_io *enqueue_request_io(struct manager_io **manager,
     aux = aux->next;
 
   new_request = (struct request_io *) calloc(1, sizeof(struct request_io));
-  memcpy(new_request , request, sizeof(struct request_io));
+  memcpy(new_request, request, sizeof(struct request_io));
 
   new_request->next = NULL;
   aux->next = new_request;
