@@ -171,14 +171,13 @@ static int check_if_can_read_write_file(char *file_name, int flag)
   return SUCCESS;
 }
 
-static int check_if_is_directory(char *path_file)
+int check_if_is_directory(const char *path_file)
 {
   struct stat path_stat;
-
   stat(path_file, &path_stat);
   if (S_ISDIR(path_stat.st_mode))
-    return ERROR;
-  return SUCCESS;
+    return SUCCESS;
+  return ERROR;
 }
 static int check_if_file_exists(char *file_name)
 {
@@ -508,6 +507,9 @@ int handle_server_error(const int socket_id, struct request_file **head)
  */
 int change_root_directory(const char *root_directory)
 {
+  if (check_if_is_directory(root_directory))
+    return ERROR;
+
   if ((chdir(root_directory)) < 0)
     return ERROR;
 
@@ -530,7 +532,7 @@ int check_file_ready_to_send(struct request_file * request)
     request->status = NOT_FOUND;
     goto on_error;
   }
-  if (check_if_is_directory(request->file_name))
+  if (check_if_is_directory(request->file_name) == SUCCESS)
   {
     request->status = BAD_REQUEST;
     goto on_error;
@@ -580,7 +582,7 @@ int check_file_ready_to_receive(struct request_file * request)
     goto on_error;
   }
 
-  if (check_if_is_directory(request->file_name))
+  if (check_if_is_directory(request->file_name) == SUCCESS)
   {
     request->status = BAD_REQUEST;
     goto on_error;
@@ -709,9 +711,13 @@ on_error:
  */
 long params_is_valid(int argc , char *argv[], long *speed_limit)
 {
-  char *port = NULL, *root_directory = NULL, *end = NULL, *sp_limit = NULL;
+  char *port = NULL;
+  char *root_directory = NULL;
+  char *end = NULL;
+  char *sp_limit = NULL;
   long port_int = 0;
-  const int base = 10, port_range_max = 65535;
+  const int base = 10;
+  
   int ret = get_param(argc, argv, &port, &root_directory, &sp_limit);
 
   if ( ret < 0)
@@ -723,30 +729,23 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
   errno = 0;
 
   port_int = strtol(port, &end, base);
-  if ((errno == ERANGE && (port_int == LONG_MAX || port_int == LONG_MIN))
-      || (port_int <= 0 || port_int > port_range_max))
+  if ((errno == ERANGE) || check_if_valid_port(port_int))
     goto on_error;
-
-  if (port_int < 1024 &&  strncmp(argv[0],"sudo", 4))
-    goto on_error;
-
+  
   if (sp_limit)
   {
     errno = 0;
-
     *speed_limit = strtol(sp_limit, &end, base);
-
-    if ((errno == ERANGE && (*speed_limit == LONG_MAX
-                             || *speed_limit == LONG_MIN))
-                             || (*speed_limit <= 0))
+    if ((errno == ERANGE) || (*speed_limit <= 0))
       goto on_error;
-
   }
+
   if (change_root_directory(root_directory) < 0)
   {
     fprintf(stderr, "\n\nNao foi possivel definir esse diretorio como raiz!\n");
     goto on_error;
   }
+
   return port_int;
 
 on_error:
@@ -757,6 +756,31 @@ on_error:
           " o programa necessitara de permissoes de super usuario. Range de ",
           "portas 1-65535.\nO limite de velocidatde e dado em bytes/s\n");
   return ERROR;
+}
+
+int check_if_valid_port(int port)
+{
+  const int port_range_max = 65535;
+  const int necessary_root_perms = 1024;
+
+  if ((port <= 0) || (port > port_range_max))
+    return ERROR;
+  if ((port < necessary_root_perms) && (getuid() != 0))
+    return ERROR;
+  return SUCCESS;
+}
+int check_config_params(char *root_directory, long port, long speed_limit)
+{
+  if (check_if_is_directory(root_directory))
+    return ERROR; 
+
+  if (check_if_valid_port(port)) 
+    return ERROR;
+
+  if (speed_limit < 0)
+    return ERROR;
+
+  return SUCCESS;
 }
 /*!
  * \brief Calcula se passou um segundo desde a ultima requisicao.
@@ -801,4 +825,22 @@ int diff_time(struct timeval *result, struct timeval *x, struct timeval *y)
   result->tv_usec = ((y->tv_sec * SECOND_TO_MICROSEC) + y->tv_usec)
                     - ((x->tv_sec * SECOND_TO_MICROSEC) + x->tv_usec);
   return result->tv_usec < 0;
+}
+char *read_config_file(long *port, long *speed_limit)
+{
+  char input[PATH_MAX];
+  const int input_numbers = 3;
+  FILE *fp;
+  int ret = 0;
+
+  fp = fopen(CONFIG_FILE_PATH, "r");
+  
+  if (fp == NULL)
+    return NULL;
+  ret = fscanf(fp, "%s\n%ld\n%ld", input, port, speed_limit);
+  if (ret < input_numbers)
+    return NULL; 
+  fclose(fp);
+  
+  return str_dup(input);
 }

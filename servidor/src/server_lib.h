@@ -23,7 +23,7 @@
 #define ERROR -1
 #define SUCCESS 0
 #define LOCAL_SOCKET_NAME "/tmp/server-socket"
-
+#define CONFIG_FILE_PATH "/tmp/server_config_file.conf"
 enum states
 {
   READY_TO_RECEIVE = 1,
@@ -57,6 +57,7 @@ int send_to_client(const int socket_id,
 int handle_uncompleted_transf(const int socket_id, struct request_file **head);
 int handle_end_upload(const int socket_id, struct request_file **head);
 int handle_server_error(const int socket_id, struct request_file **head);
+int check_if_is_directory(const char *path);
 int change_root_directory(const char *root_directory);
 int check_file_ready_to_receive(struct request_file * request);
 int check_file_ready_to_send(struct request_file * request);
@@ -65,7 +66,10 @@ void open_background_process();
 int max(const int a, const int b);
 int min(const int a , const int b);
 long params_is_valid(int argc, char *argv[], long *speed_limit);
+int check_config_params(char *root_directory, long port, long speed_limit);
+int check_if_valid_port(int port);
 void calc_if_sec_had_pass(struct request_file **r);
 int calc_buf_size(long speed_limit);
+char *read_config_file(long *port, long *speed_limit);
 int diff_time (struct timeval *result, struct timeval *x, struct timeval *y);
 #endif /* SERVER_LIB_H */

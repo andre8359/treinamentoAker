@@ -6,6 +6,7 @@
 
 
 int quit = 1;
+int reload_config = 0;
 /*!
  * \brief Libera memoria para finalizar programa.
  */
@@ -15,18 +16,27 @@ void clean_up()
   fprintf(stderr,"SINAL : SIGINT recebido !\n");
   return;
 }
+void config_server()
+{
+  reload_config = 1;
+  fprintf(stderr,"SINAL : SIGHUP recebido !\n");
+  return;
+}
 
 int main(int argc,  char *argv[])
 {
+  char *new_root_dir = NULL;
   int client_socket = 0;
   int i = 0;
+  int local_socket = 0;
   int max_socket = FD_SETSIZE;
   int min_socket = 0;
   int ret = 0;
+  int server_socket = 0;
   long speed_limit = 0;
   long port = 0;
-  int server_socket = 0;
-  int local_socket = 0;
+  long new_port = 0;
+  long new_sp = 0;
   struct request_file *head = NULL;
   struct manager_io *manager_thread = NULL;
   struct manager_io *manager_client = NULL;
@@ -54,7 +64,6 @@ int main(int argc,  char *argv[])
   if (server_socket < 0)
     goto on_error;
 
-  unlink(LOCAL_SOCKET_NAME);
   local_socket = make_local_socket(LOCAL_SOCKET_NAME,strlen(LOCAL_SOCKET_NAME));
   if (local_socket < 0)
     goto on_error;
@@ -63,7 +72,6 @@ int main(int argc,  char *argv[])
   manager_client = (struct manager_io *) calloc(1, sizeof(struct manager_io));
 
   manager_thread->quit = 1;
-  unlink(CLIENT_LOCAL_SOCKET_NAME);
   manager_thread->local_socket = make_local_socket(CLIENT_LOCAL_SOCKET_NAME,
                                                   strlen(CLIENT_LOCAL_SOCKET_NAME));
   memset(&server_addr, 0, sizeof(server_addr));
@@ -76,7 +84,8 @@ int main(int argc,  char *argv[])
 
   init_threads(&manager_thread);
 
-  signal(SIGINT,clean_up);
+  signal(SIGINT, clean_up);
+  signal(SIGHUP, config_server);
 
   FD_ZERO (&active_read_fd_set);
   FD_ZERO (&active_write_fd_set);
@@ -95,8 +104,39 @@ int main(int argc,  char *argv[])
 
   while (quit)
   {
-    if (select(max_socket + 1, &read_fd_set, &write_fd_set,NULL, &time_out) < 0)
+    if (reload_config)
     {
+      new_root_dir = read_config_file(&new_port, &new_sp);
+      
+      if (check_config_params(new_root_dir, new_port, new_sp))
+        goto on_config_error;
+
+      change_root_directory(new_root_dir);
+      port = new_port;
+      if (new_sp == 0)
+        speed_limit = LONG_MAX;
+      else
+        speed_limit = new_sp;
+      
+      if (server_socket)
+        close(server_socket);
+      server_socket = make_listening_socket(port);
+
+      FD_SET (server_socket, &active_read_fd_set);
+      min_socket = min(server_socket, min_socket);
+      max_socket = max(server_socket, max_socket) + 1;
+on_config_error:
+      reload_config = 0;
+      if (new_root_dir)
+        free(new_root_dir);
+    }
+
+    ret = select(max_socket + 1, &read_fd_set, &write_fd_set,NULL, &time_out);
+    if (ret < 0)
+    {
+      if (errno == EINTR) 
+        continue; 
+
       fprintf(stderr,"Erro ao tentar selecionar sockets! %s\n",strerror(errno));
       goto on_error;
     }
