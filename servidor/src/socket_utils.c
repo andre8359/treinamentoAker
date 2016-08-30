@@ -91,6 +91,7 @@ int make_local_socket(char *socket_name, int socket_name_size)
   int ret = 0;
 
   bzero((char *) &client_addr, sizeof(client_addr));
+  unlink(socket_name);
 
   client_addr.sun_family = PF_LOCAL;
   strncpy(client_addr.sun_path, socket_name, socket_name_size );
