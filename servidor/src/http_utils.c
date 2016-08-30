@@ -69,7 +69,6 @@ static void get_request_info(struct request_file *request);
 static char *set_content_type(const char *file_name);
 static char *set_content_length(const char *file_name, long *file_size);
 static char *get_date();
-static char *str_dup(const char *str);
 /*!
  * \brief Encontra fim de requisicao.
  * \param[in] request String que representa a requisicao.

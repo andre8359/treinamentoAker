@@ -24,6 +24,7 @@ enum status_conection
 };
 char *find_end_request(char *header);
 void check_request_info(struct request_file *request);
+char *str_dup(const char *str);
 char *make_header(struct request_file *request);
 int create_default_response_files();
 int set_std_response(struct request_file *r);
