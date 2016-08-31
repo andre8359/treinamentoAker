@@ -103,7 +103,8 @@ void check_request_info(struct request_file *request)
   if (request->file_name == NULL)
     goto on_error;
 
-  if (request->file_size < 0)
+  if (request->file_size < 0 
+      || (request->method == PUT && request->file_size == 0))
     goto on_error;
 
   request->status = OK;
@@ -204,6 +205,10 @@ int set_std_response(struct request_file *r)
   free(r->file_name);
   r->file_name = NULL;
 
+  if (r->fd)
+    close(r->fd);
+
+  r->method = GET;
   r->file_name = str_dup(std_response_file_names[r->status - 1]);
 
   stat(r->file_name, &st);
@@ -226,10 +231,10 @@ char *make_header(struct request_file *request)
   char *content_type = set_content_type(request->file_name);
   char connection_status[] = "Connection: Close\r\n";
   int header_size = strlen(status_conection[request->status])
-    + strlen(content_type)+1
+    + strlen(content_type) + 1
     + strlen(content_length) + 1
     + strlen(date) + 1
-    + strlen(server)+ 1
+    + strlen(server) + 1
     + end_header_len
     + strlen(connection_status);
 

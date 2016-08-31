@@ -7,6 +7,7 @@
 #include <time.h>
 #include <limits.h>
 #include "request_lib.h"
+#include "server_lib.h"
 #include <errno.h>
 #define MAX_HEADER_SIZE 4000
 enum status_conection
