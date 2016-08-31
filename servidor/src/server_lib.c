@@ -118,10 +118,8 @@ int check_speed_limit(struct request_file* request, long speed_limit)
 static int rename_downloaded_file(struct request_file *request)
 {
   char downloaded_file_name[PATH_MAX];
-
   if (request == NULL)
     return ERROR;
-
   sprintf(downloaded_file_name, "%s~part", request->file_name);
   return rename(downloaded_file_name, request->file_name);
 }
@@ -605,7 +603,6 @@ int check_file_ready_to_receive(struct request_file * request)
 
   return SUCCESS;
 on_error:
-  request->method = GET;
   set_std_response(request);
   return ERROR;
 }

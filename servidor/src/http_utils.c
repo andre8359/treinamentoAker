@@ -64,7 +64,7 @@ const char  *std_response_file_names[] =
 };
 /* Headers das funcoes estaticas */
 static long get_content_length(struct request_file *request);
-static char *get_file_name(char *input_path);
+static int get_file_name(char *input_path);
 static void get_request_info(struct request_file *request);
 static char *set_content_type(const char *file_name);
 static char *set_content_length(const char *file_name, long *file_size);
@@ -125,6 +125,7 @@ static void get_request_info(struct request_file *request)
   char file_path[PATH_MAX];
   const int command_size = 5, http_version_size = 10;
   char command[command_size], http_version[http_version_size];
+  char real_path_file_name[PATH_MAX];
 
   memset(file_path, 0, PATH_MAX);
   memset(command, 0, command_size);
@@ -141,7 +142,13 @@ static void get_request_info(struct request_file *request)
     request->method  = PUT;
   }
 
-  request->file_name = get_file_name(file_path);
+  if (get_file_name(file_path))
+    request->file_name = NULL;
+  else
+  {
+    realpath(file_path + 1, real_path_file_name);
+    request->file_name = str_dup(real_path_file_name);
+  }
 }
 
 /*!
@@ -169,20 +176,19 @@ static long get_content_length(struct request_file *request)
     return ERROR;
   return file_length;
 }
-static char *get_file_name(char *input_path)
+static int get_file_name(char *input_path)
 {
-  char *ret = NULL;
-
   if (!strncmp(input_path,"..",3))
-    return ret;
+    return ERROR;
   else if (*input_path != '/')
-    return ret;
+    return ERROR;
   if (!strncmp(input_path, "/", 2) || !strncmp(input_path,"/.",3))
-    ret = strdup("index.html");
+  {
+    strncpy(input_path, "index.html", strlen("index.html") + 1);
+    return SUCCESS;
+  }
   else
-    ret = strdup(input_path + 1);
-
-  return ret;
+    return SUCCESS; 
 }
 char *str_dup(const char *str)
 {
@@ -205,7 +211,7 @@ int set_std_response(struct request_file *r)
   free(r->file_name);
   r->file_name = NULL;
 
-  if (r->fd)
+  if (r->fd > 0)
     close(r->fd);
 
   r->method = GET;

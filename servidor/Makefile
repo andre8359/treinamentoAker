@@ -4,6 +4,7 @@ CC = gcc
 ODIR = obj
 IDIR = src
 
+
 CFLAGS=-Wall -Wextra
 
 ifdef RELEASE
@@ -22,6 +23,7 @@ DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 _OBJ = main.o $(patsubst %.c,%.o,$(_DEPS_C))
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 $(ODIR)/%.o: $(IDIR)/%.c $(DEPS)
+	mkdir -p $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 prog: $(OBJ)
