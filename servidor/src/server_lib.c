@@ -571,8 +571,11 @@ int check_file_ready_to_receive(struct request_file * request)
   }
 
   realpath(request->file_name, abs_path);
-  last_slash = strrchr(abs_path,'/');
-  memset(last_slash, 0, strlen(last_slash));
+  if (strstr(abs_path, request->file_name))
+  {
+    last_slash = strrchr(abs_path,'/');
+    memset(last_slash, 0, strlen(last_slash));
+  }
 
   if (check_if_file_exists(abs_path))
   {
