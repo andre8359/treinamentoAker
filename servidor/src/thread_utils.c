@@ -48,6 +48,7 @@ void *thread_func(void *args)
 
       request = dequeue_request_io(manager);
       pthread_mutex_unlock(&mutex);
+
       if (request == NULL || request->fd == 0)
         continue;
 
@@ -62,9 +63,7 @@ void *thread_func(void *args)
                                request->size,
                                request->offset);
 
-      pthread_mutex_lock(&mutex);
       write(m->local_socket, &request, sizeof(struct request_io*));
-      pthread_mutex_unlock(&mutex);
   }
   return 0;
 }

@@ -128,6 +128,7 @@ int main(int argc,  char *argv[])
       FD_SET (server_socket, &active_read_fd_set);
       min_socket = min(server_socket, min_socket);
       max_socket = max(server_socket, max_socket) + 1;
+
 on_config_error:
       reload_config = 0;
       if (new_root_dir)

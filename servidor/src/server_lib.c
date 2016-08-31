@@ -262,8 +262,7 @@ int receive_from_client(const int socket_id,
   enqueue_request_io(manager, &request_thread);
   pthread_mutex_unlock(&mutex);
 
-  if ((*manager)->total_request != 0)
-    pthread_cond_signal(&cond);
+  pthread_cond_signal(&cond);
 
   return READY_TO_RECEIVE;
 }
@@ -338,8 +337,7 @@ int request_read(const int socket_id,
   enqueue_request_io(manager, &request_thread);
   pthread_mutex_unlock(&mutex);
 
-  if ((*manager)->total_request != 0)
-    pthread_cond_signal(&cond);
+  pthread_cond_signal(&cond);
 
   return ERROR;
 }
