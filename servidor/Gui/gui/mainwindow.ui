@@ -82,6 +82,11 @@
          </item>
          <item>
           <property name="text">
+           <string>Kb/s</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
            <string>Mb/s</string>
           </property>
          </item>
