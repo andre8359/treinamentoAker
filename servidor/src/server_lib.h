@@ -66,10 +66,11 @@ void open_background_process();
 int max(const int a, const int b);
 int min(const int a , const int b);
 long params_is_valid(int argc, char *argv[], long *speed_limit);
-int check_config_params(char *root_directory, long port, long speed_limit);
 int check_if_valid_port(int port);
 void calc_if_sec_had_pass(struct request_file **r);
 int calc_buf_size(long speed_limit);
-char *read_config_file(long *port, long *speed_limit);
 int diff_time (struct timeval *result, struct timeval *x, struct timeval *y);
+int check_config_params(char *root_directory, long port, long speed_limit);
+char *read_config_file(long *port, long *speed_limit);
+int write_config_file(long port, long speed_limit);
 #endif /* SERVER_LIB_H */

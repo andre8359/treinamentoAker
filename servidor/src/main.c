@@ -83,6 +83,9 @@ int main(int argc,  char *argv[])
     goto on_error;
 
   init_threads(&manager_thread);
+  
+  if (write_config_file(port,speed_limit))
+    goto on_error;
 
   signal(SIGINT, clean_up);
   signal(SIGHUP, config_server);
@@ -107,7 +110,7 @@ int main(int argc,  char *argv[])
     if (reload_config)
     {
       new_root_dir = read_config_file(&new_port, &new_sp);
-      
+      fprintf(stderr, "%s - %ld - %ld \n", new_root_dir, new_port, new_sp); 
       if (check_config_params(new_root_dir, new_port, new_sp))
         goto on_config_error;
 

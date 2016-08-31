@@ -769,19 +769,7 @@ int check_if_valid_port(int port)
     return ERROR;
   return SUCCESS;
 }
-int check_config_params(char *root_directory, long port, long speed_limit)
-{
-  if (check_if_is_directory(root_directory))
-    return ERROR; 
 
-  if (check_if_valid_port(port)) 
-    return ERROR;
-
-  if (speed_limit < 0)
-    return ERROR;
-
-  return SUCCESS;
-}
 /*!
  * \brief Calcula se passou um segundo desde a ultima requisicao.
  * [in] r Estrutura com informacoes da requisicao.
@@ -826,21 +814,54 @@ int diff_time(struct timeval *result, struct timeval *x, struct timeval *y)
                     - ((x->tv_sec * SECOND_TO_MICROSEC) + x->tv_usec);
   return result->tv_usec < 0;
 }
+
+int check_config_params(char *root_directory, long port, long speed_limit)
+{
+  if (check_if_is_directory(root_directory))
+    return ERROR; 
+
+  if (check_if_valid_port(port)) 
+    return ERROR;
+
+  if (speed_limit < 0)
+    return ERROR;
+
+  return SUCCESS;
+}
+
 char *read_config_file(long *port, long *speed_limit)
 {
   char input[PATH_MAX];
   const int input_numbers = 3;
   FILE *fp;
   int ret = 0;
+  pid_t pid;
 
   fp = fopen(CONFIG_FILE_PATH, "r");
   
   if (fp == NULL)
     return NULL;
-  ret = fscanf(fp, "%s\n%ld\n%ld", input, port, speed_limit);
+  ret = fscanf(fp, "%d\n%s\n%ld\n%ld", &pid, input, port, speed_limit);
   if (ret < input_numbers)
     return NULL; 
   fclose(fp);
   
   return str_dup(input);
+}
+int write_config_file(long port, long speed_limit)
+{
+  FILE *fp;
+  char root_dir[PATH_MAX];
+
+  fp = fopen(CONFIG_FILE_PATH, "w");
+  if (fp == NULL)
+    return ERROR;
+
+  if (getcwd(root_dir,PATH_MAX) == NULL)
+    return ERROR;
+
+  fprintf(fp,"%d\n%s\n%ld\n%ld\n",getpid(),root_dir, port, speed_limit);
+
+  fclose(fp);
+  return SUCCESS; 
 }
