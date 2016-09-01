@@ -130,7 +130,11 @@ static int rename_downloaded_file(struct request_file *request)
   ret = rename(downloaded_file_name, request->file_name);
   if (ret != SUCCESS)
     ret = creat(request->file_name,S_IRUSR | S_IWUSR);
-  return ret;
+  if (ret > 0)
+    close(ret);
+  else
+    return ERROR;
+  return SUCCESS;
 }
 static int delete_uncompleted_downloaded_file(struct request_file *request)
 {
