@@ -186,7 +186,7 @@ static int get_file_name(char *input_path)
     return ERROR;
   if (!strncmp(input_path, "/", 2) || !strncmp(input_path,"/.",3))
   {
-    strncpy(input_path, "index.html", strlen("index.html") + 1);
+    strncpy(input_path, "/index.html", strlen("/index.html") + 1);
     return SUCCESS;
   }
   else
