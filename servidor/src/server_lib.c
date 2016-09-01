@@ -176,7 +176,7 @@ int check_if_is_directory(const char *path_file)
 {
   struct stat path_stat;
 
-  memset(&path_stat, 0, sizeof(path_file));
+  memset(&path_stat, 0, sizeof(path_stat));
 
   stat(path_file, &path_stat);
   if (S_ISDIR(path_stat.st_mode))
