@@ -146,7 +146,7 @@ static void get_request_info(struct request_file *request)
   else
   {
     if (realpath(file_path + 1, real_path_file_name) ==  NULL
-        && errno == ENOTDIR)
+        && strstr(real_path_file_name, file_path) == NULL )
       request->file_name = NULL;
     else
       request->file_name = str_dup(real_path_file_name);
