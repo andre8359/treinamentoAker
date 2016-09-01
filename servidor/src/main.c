@@ -177,6 +177,7 @@ on_config_error:
           {
             handle_server_error(i , &head);
             FD_SET(ret, &active_write_fd_set);
+            FD_CLR(ret, &read_fd_set);
             FD_CLR(ret, &active_read_fd_set);
           }
 
@@ -193,6 +194,12 @@ on_config_error:
         else if(ret == ENDED_UPLOAD_UNCOMPLETED)
         {
           handle_uncompleted_transf(i, &head);
+          FD_CLR(i, &active_read_fd_set);
+        }
+        else if(ret == ENDED_UPLOAD)
+        {
+          handle_end_upload(i, &head);
+          FD_SET(i, &active_write_fd_set);
           FD_CLR(i, &active_read_fd_set);
         }
       }

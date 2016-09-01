@@ -10,7 +10,7 @@ static int prepare_request_io(struct request_file *request,
                               struct request_io *request_thread,
                               int buf_size)
 {
-  const int file_name_size = strlen(request->request);
+  const int file_name_size = strlen(request->file_name) + strlen("~part") + 1;
   char file_name[file_name_size];
 
   if (request->fd <= 0)
@@ -31,6 +31,7 @@ static int prepare_request_io(struct request_file *request,
         return ERROR;
     }
   }
+
   request_thread->socket_id = request->socket_id;
   request_thread->fd = request->fd;
   request_thread->method = request->method;
@@ -94,6 +95,8 @@ static int get_info_after_end_request(struct request_file *request,
       return READY_TO_SEND;
 
     split_request_from_data(request, manager);
+    if (request->transferred_size == request->file_size)
+      return ENDED_UPLOAD;
     return READY_TO_RECEIVE;
   }
 
@@ -172,6 +175,9 @@ static int check_if_can_read_write_file(char *file_name, int flag)
 int check_if_is_directory(const char *path_file)
 {
   struct stat path_stat;
+
+  memset(&path_stat, 0, sizeof(path_file));
+
   stat(path_file, &path_stat);
   if (S_ISDIR(path_stat.st_mode))
     return SUCCESS;
@@ -179,7 +185,7 @@ int check_if_is_directory(const char *path_file)
 }
 static int check_if_file_exists(char *file_name)
 {
-  if (access(file_name, F_OK) != -1 )
+  if (access(file_name, F_OK) == SUCCESS)
     return SUCCESS;
   return ERROR;
 }
@@ -715,7 +721,7 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
   char *sp_limit = NULL;
   long port_int = 0;
   const int base = 10;
-  
+
   int ret = get_param(argc, argv, &port, &root_directory, &sp_limit);
 
   if ( ret < 0)
@@ -729,7 +735,7 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
   port_int = strtol(port, &end, base);
   if ((errno == ERANGE) || check_if_valid_port(port_int))
     goto on_error;
-  
+
   if (sp_limit)
   {
     errno = 0;
@@ -816,9 +822,9 @@ int diff_time(struct timeval *result, struct timeval *x, struct timeval *y)
 int check_config_params(char *root_directory, long port, long speed_limit)
 {
   if (check_if_is_directory(root_directory))
-    return ERROR; 
+    return ERROR;
 
-  if (check_if_valid_port(port)) 
+  if (check_if_valid_port(port))
     return ERROR;
 
   if (speed_limit < 0)
@@ -836,14 +842,14 @@ char *read_config_file(long *port, long *speed_limit)
   pid_t pid;
 
   fp = fopen(CONFIG_FILE_PATH, "r");
-  
+
   if (fp == NULL)
     return NULL;
   ret = fscanf(fp, "%d\n%s\n%ld\n%ld", &pid, input, port, speed_limit);
   if (ret < input_numbers)
-    return NULL; 
+    return NULL;
   fclose(fp);
-  
+
   return str_dup(input);
 }
 int write_config_file(long port, long speed_limit)
@@ -861,5 +867,5 @@ int write_config_file(long port, long speed_limit)
   fprintf(fp,"%d\n%s\n%ld\n%ld\n",getpid(),root_dir, port, speed_limit);
 
   fclose(fp);
-  return SUCCESS; 
+  return SUCCESS;
 }
