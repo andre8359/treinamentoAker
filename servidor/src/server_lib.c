@@ -121,10 +121,16 @@ int check_speed_limit(struct request_file* request, long speed_limit)
 static int rename_downloaded_file(struct request_file *request)
 {
   char downloaded_file_name[PATH_MAX];
+  int ret = 0;
   if (request == NULL)
     return ERROR;
+
   sprintf(downloaded_file_name, "%s~part", request->file_name);
-  return rename(downloaded_file_name, request->file_name);
+  
+  ret = rename(downloaded_file_name, request->file_name);
+  if (ret != SUCCESS)
+    ret = creat(request->file_name,S_IRUSR | S_IWUSR);
+  return ret;
 }
 static int delete_uncompleted_downloaded_file(struct request_file *request)
 {
@@ -146,7 +152,7 @@ static struct request_file *set_method_equals_get(const int socket_id,
   if (request == NULL)
     return NULL;
 
-  if (request->fd)
+  if (request->fd > 0)
     close(request->fd);
 
   request->method = GET;
