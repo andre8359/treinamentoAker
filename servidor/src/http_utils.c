@@ -52,15 +52,15 @@ const char *messages_status[] =
 /*Nomes do arquivos com html das respostas padao.*/
 const char  *std_response_file_names[] =
 {
-  "ok.html",
-  "created.html",
-  "bad_request.html",
-  "unauthorized.html",
-  "forbidden.html",
-  "not_found.html",
-  "conflict.html",
-  "internal_error.html",
-  "service_unavailable.html",
+  "/tmp/ok.html",
+  "/tmp/created.html",
+  "/tmp/bad_request.html",
+  "/tmp/unauthorized.html",
+  "/tmp/forbidden.html",
+  "/tmp/not_found.html",
+  "/tmp/conflict.html",
+  "/tmp/internal_error.html",
+  "/tmp/service_unavailable.html",
 };
 /* Headers das funcoes estaticas */
 static long get_content_length(struct request_file *request);
@@ -103,8 +103,7 @@ void check_request_info(struct request_file *request)
   if (request->file_name == NULL)
     goto on_error;
 
-  if (request->file_size < 0 
-      || (request->method == PUT && request->file_size == 0))
+  if (request->file_size < 0 )
     goto on_error;
 
   request->status = OK;
@@ -146,8 +145,11 @@ static void get_request_info(struct request_file *request)
     request->file_name = NULL;
   else
   {
-    realpath(file_path + 1, real_path_file_name);
-    request->file_name = str_dup(real_path_file_name);
+    if (realpath(file_path + 1, real_path_file_name) ==  NULL
+        && errno == ENOTDIR)
+      request->file_name = NULL;
+    else
+      request->file_name = str_dup(real_path_file_name);
   }
 }
 
@@ -172,7 +174,7 @@ static long get_content_length(struct request_file *request)
   file_length = strtol(ch, &end, base);
 
   if (errno == ERANGE && (file_length == LONG_MAX || file_length == LONG_MIN
-                          || file_length <= 0))
+                          || file_length < 0))
     return ERROR;
   return file_length;
 }
@@ -188,7 +190,7 @@ static int get_file_name(char *input_path)
     return SUCCESS;
   }
   else
-    return SUCCESS; 
+    return SUCCESS;
 }
 char *str_dup(const char *str)
 {
@@ -208,11 +210,15 @@ char *str_dup(const char *str)
 int set_std_response(struct request_file *r)
 {
   struct stat st;
+
+  memset(&st, 0, sizeof(st));
+
   free(r->file_name);
   r->file_name = NULL;
 
   if (r->fd > 0)
     close(r->fd);
+  r->fd = 0;
 
   r->method = GET;
   r->file_name = str_dup(std_response_file_names[r->status - 1]);
@@ -265,7 +271,7 @@ static char *set_content_length(const char *file_name, long *file_size)
 
   if (content_length == NULL)
     return content_length;
-
+  memset(&st, 0, sizeof(st));
   stat(file_name, &st);
   if (st.st_size < 0)
   {
@@ -340,7 +346,7 @@ int create_default_response_files()
   int i;
   for (i = OK; i < LAST_STATUS; i++)
   {
-    fp = fopen(std_response_file_names[i-1], "w");
+   fp = fopen(std_response_file_names[i -1], "w");
     if (fp == NULL)
       return ERROR;
 
