@@ -13,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    load_config();
 }
 
 MainWindow::~MainWindow()
@@ -32,6 +33,29 @@ bool MainWindow::read_pid_server()
     if (ret == 0)
         return false;
     fclose(fp);
+    return true;
+}
+bool MainWindow::load_config()
+{
+    FILE *fp;
+    int ret = 0;
+    char root_dir[PATH_MAX];
+    int port = 0;
+    long speed_limmit = 0;
+
+    fp = fopen(CONFIG_FILE_PATH,"r");
+
+    if (fp == NULL)
+        return false;
+    ret = fscanf(fp,"%d\n%s\n%d\n%ld\n", &(this->pid_server), root_dir, &port, &speed_limmit);
+    if (ret < 4)
+        return false;
+    fclose(fp);
+
+    ui->txt_root_dir->setText(root_dir);
+    ui->txt_port->setText(QString::number(port));
+    ui->txt_speed_limit->setText(QString::number(speed_limmit));
+    ui->cb_speed_limit->setCurrentIndex(0);
     return true;
 }
 
@@ -128,7 +152,6 @@ void MainWindow::on_bt_apply_clicked()
         msg_error = "Erro sinal nao pode ser enviado!";
         goto on_error;
     }
-
 
     QMessageBox::information(this,"Sucesso", "Configuracao aplicada com sucesso!");
     return;

@@ -21,6 +21,7 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
     bool read_pid_server();
+    bool load_config();
     bool write_config_file();
     bool check_param();
 

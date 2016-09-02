@@ -846,7 +846,7 @@ int check_config_params(char *root_directory, long port, long speed_limit)
 char *read_config_file(long *port, long *speed_limit)
 {
   char input[PATH_MAX];
-  const int input_numbers = 3;
+  const int input_numbers = 4;
   FILE *fp;
   int ret = 0;
   pid_t pid;
