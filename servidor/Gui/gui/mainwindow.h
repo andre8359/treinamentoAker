@@ -7,8 +7,8 @@
 #define KILOBYTE 1024 * BYTE
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
-#define CONFIG_FILE_PATH "/tmp/server_config_file.conf"
-
+#define CONFIG_FILE_PATH "/tmp/cacique.conf"
+#define PID_FILE_PATH "/tmp/cacique.pid"
 namespace Ui {
 class MainWindow;
 }

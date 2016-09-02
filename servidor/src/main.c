@@ -25,7 +25,7 @@ void config_server()
 
 int main(int argc,  char *argv[])
 {
-  char *new_root_dir = NULL;
+  char new_root_dir[PATH_MAX];
   int client_socket = 0;
   int i = 0;
   int local_socket = 0;
@@ -43,7 +43,6 @@ int main(int argc,  char *argv[])
   struct timeval time_start;
   struct timeval time_last_transf;
   struct timeval time_out;
-  struct sockaddr_un server_addr;
   fd_set active_read_fd_set;
   fd_set active_write_fd_set;
   fd_set read_fd_set;
@@ -64,7 +63,7 @@ int main(int argc,  char *argv[])
   if (server_socket < 0)
     goto on_error;
 
-  local_socket = make_local_socket(LOCAL_SOCKET_NAME,strlen(LOCAL_SOCKET_NAME));
+  local_socket = make_local_socket(LOCAL_SOCKET_NAME);
   if (local_socket < 0)
     goto on_error;
 
@@ -72,18 +71,12 @@ int main(int argc,  char *argv[])
   manager_client = (struct manager_io *) calloc(1, sizeof(struct manager_io));
 
   manager_thread->quit = 1;
-  manager_thread->local_socket = make_local_socket(CLIENT_LOCAL_SOCKET_NAME,
-                                                  strlen(CLIENT_LOCAL_SOCKET_NAME));
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sun_family = PF_LOCAL;
-  strncpy(server_addr.sun_path, LOCAL_SOCKET_NAME, strlen(LOCAL_SOCKET_NAME));
-
-  if (connect(manager_thread->local_socket, (struct sockaddr *) &server_addr,
-              sizeof(server_addr)) < 0)
-    goto on_error;
+  manager_thread->local_socket = local_socket;
 
   init_threads(&manager_thread);
-  
+
+  if (write_pid_file())
+    goto on_error;
   if (write_config_file(port,speed_limit))
     goto on_error;
 
@@ -102,44 +95,42 @@ int main(int argc,  char *argv[])
   read_fd_set = active_read_fd_set;
   write_fd_set = active_write_fd_set;
 
-  time_out.tv_sec = LONG_MAX;
   time_out.tv_usec = 0;
 
   while (quit)
   {
     if (reload_config)
     {
-      new_root_dir = read_config_file(&new_port, &new_sp);
-      fprintf(stderr, "%s - %ld - %ld \n", new_root_dir, new_port, new_sp); 
+      read_config_file(new_root_dir, &new_port, &new_sp);
+      fprintf(stderr, "%s - %ld - %ld \n", new_root_dir, new_port, new_sp);
+
       if (check_config_params(new_root_dir, new_port, new_sp))
         goto on_config_error;
 
-      change_root_directory(new_root_dir);
-      port = new_port;
-      if (new_sp == 0)
-        speed_limit = LONG_MAX;
-      else
-        speed_limit = new_sp;
-      
-      if (server_socket)
-        close(server_socket);
-      server_socket = make_listening_socket(port);
+      if (change_root_directory(new_root_dir))
+        goto on_config_error;
 
-      FD_SET (server_socket, &active_read_fd_set);
+      FD_CLR (server_socket, &active_read_fd_set);
+      FD_CLR (server_socket, &read_fd_set);
+      if (change_listen_socket(&port, new_port, &server_socket))
+        goto on_config_error;
+
+      speed_limit = (new_sp) ? new_sp : LONG_MAX;
       min_socket = min(server_socket, min_socket);
       max_socket = max(server_socket, max_socket) + 1;
 
 on_config_error:
+      FD_SET (server_socket, &active_read_fd_set);
+      FD_SET (server_socket, &read_fd_set);
       reload_config = 0;
-      if (new_root_dir)
-        free(new_root_dir);
     }
 
-    ret = select(max_socket + 1, &read_fd_set, &write_fd_set,NULL, &time_out);
+    ret = select(max_socket + 1, &read_fd_set, &write_fd_set,NULL,
+                (time_out.tv_usec) ? &time_out : NULL);
     if (ret < 0)
     {
-      if (errno == EINTR) 
-        continue; 
+      if (errno == EINTR)
+        continue;
 
       fprintf(stderr,"Erro ao tentar selecionar sockets! %s\n",strerror(errno));
       goto on_error;
@@ -232,7 +223,6 @@ on_config_error:
     }
     else
     {
-      time_out.tv_sec = LONG_MAX;
       time_out.tv_usec = 0;
       read_fd_set = active_read_fd_set;
       write_fd_set = active_write_fd_set;

@@ -1,5 +1,6 @@
 #ifndef SERVER_LIB_H
 #define SERVER_LIB_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,10 +21,13 @@
 #include "request_lib.h"
 #include "http_utils.h"
 #include "thread_utils.h"
+#include "socket_utils.h"
 #define ERROR -1
 #define SUCCESS 0
-#define LOCAL_SOCKET_NAME "/tmp/server-socket"
-#define CONFIG_FILE_PATH "/tmp/server_config_file.conf"
+#define LOCAL_SOCKET_NAME "/tmp/cacique-local-socket"
+#define CONFIG_FILE_PATH "/tmp/cacique.conf"
+#define PID_FILE_PATH "/tmp/cacique.pid"
+
 enum states
 {
   READY_TO_RECEIVE = 1,
@@ -71,6 +75,8 @@ void calc_if_sec_had_pass(struct request_file **r);
 int calc_buf_size(long speed_limit);
 int diff_time (struct timeval *result, struct timeval *x, struct timeval *y);
 int check_config_params(char *root_directory, long port, long speed_limit);
-char *read_config_file(long *port, long *speed_limit);
+int read_config_file(char *root_dir, long *port, long *speed_limit);
+int write_pid_file();
 int write_config_file(long port, long speed_limit);
+int change_listen_socket(long *port, long new_port, int *server_socket);
 #endif /* SERVER_LIB_H */

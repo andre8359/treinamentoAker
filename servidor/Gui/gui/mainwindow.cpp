@@ -25,14 +25,16 @@ bool MainWindow::read_pid_server()
     FILE *fp;
     int ret = 0;
 
-    fp = fopen(CONFIG_FILE_PATH,"r");
+    fp = fopen(PID_FILE_PATH,"r");
 
     if (fp == NULL)
         return false;
-    ret = fscanf(fp,"%d\n", &(this->pid_server));
+
+    ret = fscanf(fp,"%ld",(long *) &(this->pid_server));
+    fclose(fp);
+
     if (ret == 0)
         return false;
-    fclose(fp);
     return true;
 }
 bool MainWindow::load_config()
@@ -44,14 +46,13 @@ bool MainWindow::load_config()
     long speed_limmit = 0;
 
     fp = fopen(CONFIG_FILE_PATH,"r");
-
     if (fp == NULL)
         return false;
-    ret = fscanf(fp,"%d\n%s\n%d\n%ld\n", &(this->pid_server), root_dir, &port, &speed_limmit);
-    if (ret < 4)
-        return false;
+    ret = fscanf(fp,"%s\n%d\n%ld\n", root_dir, &port, &speed_limmit);
     fclose(fp);
 
+    if (ret < 3)
+        return false;
     ui->txt_root_dir->setText(root_dir);
     ui->txt_port->setText(QString::number(port));
     ui->txt_speed_limit->setText(QString::number(speed_limmit));
@@ -70,8 +71,10 @@ bool MainWindow::write_config_file()
     if (fp == NULL)
         return false;
 
-    fprintf(fp,"%d\n%s\n%d\n%ld\n",this->pid_server,ui->txt_root_dir->text().toUtf8().constData(),
-            ui->txt_port->text().toInt(), ui->txt_speed_limit->text().toLong() * this->speed_rate);
+    fprintf(fp,"%s\n%d\n%ld\n",
+            ui->txt_root_dir->text().toUtf8().constData(),
+            ui->txt_port->text().toInt(),
+            ui->txt_speed_limit->text().toLong() * this->speed_rate);
     fclose(fp);
     return true;
 }
@@ -80,14 +83,16 @@ bool MainWindow::check_param()
 {
     QString msg_error;
 
-    if (ui->txt_root_dir->text().size() < 1 || !QDir(ui->txt_root_dir->text()).exists())
+    if (ui->txt_root_dir->text().size() < 1
+        || !QDir(ui->txt_root_dir->text()).exists())
     {
         msg_error = "Diretorio raiz invalido!";
         goto on_error;
     }
 
     if (ui->txt_port->text().size() < 1 ||
-            ui->txt_port->text().toInt() < 0 || ui->txt_port->text().toInt() > 65535)
+        ui->txt_port->text().toInt() < 0
+        || ui->txt_port->text().toInt() > 65535)
     {
         msg_error = "Valor de porta invalido!";
         goto on_error;

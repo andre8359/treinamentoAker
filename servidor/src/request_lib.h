@@ -15,7 +15,8 @@
 #define MEGABYTE 1024 * KILOBYTE
 #define GIGABYTE 1024 * MEGABYTE
 #define BUFSIZE 8 * KILOBYTE
-
+#define REQUEST_SIZE 4 * KILOBYTE
+#define REQUEST_MAX 8 * KILOBYTE
 enum method
 {
   GET = 1,

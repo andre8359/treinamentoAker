@@ -38,6 +38,7 @@ static int prepare_request_io(struct request_file *request,
   request_thread->buffer = request->buffer;
   request_thread->offset = request->transferred_size;
   request_thread->next = NULL;
+
   buf_size = (buf_size > (request->file_size - request->transferred_size)
               ? request->file_size - request->transferred_size : buf_size);
 
@@ -126,7 +127,7 @@ static int rename_downloaded_file(struct request_file *request)
     return ERROR;
 
   sprintf(downloaded_file_name, "%s~part", request->file_name);
-  
+
   ret = rename(downloaded_file_name, request->file_name);
   if (ret != SUCCESS)
     ret = creat(request->file_name,S_IRUSR | S_IWUSR);
@@ -231,11 +232,24 @@ int receive_request_from_client(const int socket_id,
     return ENDED_DOWNLOAD_UNCOMPLETED;
 
   request->transf_last_sec += nbytes;
+  if (request->request == NULL)
+    request->request = (char *) calloc(REQUEST_SIZE, sizeof(char));
+  received_size = strlen(request->request);
 
-  received_size = (request->request != NULL) ? strlen(request->request) : 0;
-
-  request->request = realloc(request->request, received_size + nbytes + 1);
-  memcpy(request->request + received_size, bufin, nbytes);
+  if ((received_size + nbytes < REQUEST_SIZE)
+      || (received_size > REQUEST_SIZE && received_size + nbytes < REQUEST_MAX))
+    memcpy(request->request + received_size, bufin, nbytes);
+  else if (received_size <= REQUEST_SIZE)
+  {
+    request->request = realloc(request->request, REQUEST_MAX);
+    memcpy(request->request + received_size, bufin, nbytes);
+  }
+  else if (received_size)
+  {
+    request->status = INTERNAL_ERROR;
+    set_std_response(request);
+    return READY_TO_SEND;
+  }
   request->request[received_size + nbytes] = '\0';
 
   return get_info_after_end_request(request, manager);
@@ -734,7 +748,7 @@ long params_is_valid(int argc , char *argv[], long *speed_limit)
 
   int ret = get_param(argc, argv, &port, &root_directory, &sp_limit);
 
-  if ( ret < 0)
+  if (ret < 0)
     goto on_error;
 
   if (port == NULL || root_directory == NULL)
@@ -842,25 +856,37 @@ int check_config_params(char *root_directory, long port, long speed_limit)
 
   return SUCCESS;
 }
-
-char *read_config_file(long *port, long *speed_limit)
+int read_config_file(char *root_dir, long *port, long *speed_limit)
 {
-  char input[PATH_MAX];
-  const int input_numbers = 4;
+  const int input_total = 3;
   FILE *fp;
   int ret = 0;
-  pid_t pid;
 
   fp = fopen(CONFIG_FILE_PATH, "r");
-
   if (fp == NULL)
-    return NULL;
-  ret = fscanf(fp, "%d\n%s\n%ld\n%ld", &pid, input, port, speed_limit);
-  if (ret < input_numbers)
-    return NULL;
+    return ERROR;
+
+  ret = fscanf(fp, "%s\n%ld\n%ld", root_dir, port, speed_limit);
   fclose(fp);
 
-  return str_dup(input);
+  if (ret < input_total)
+    return ERROR;
+
+  return SUCCESS;
+}
+int write_pid_file()
+{
+  FILE *fp;
+
+  fp = fopen(PID_FILE_PATH, "w");
+
+  if (fp == NULL)
+    return ERROR;
+
+  fprintf(fp, "%ld", (long) getpid());
+
+  fclose(fp);
+  return SUCCESS;
 }
 int write_config_file(long port, long speed_limit)
 {
@@ -872,10 +898,30 @@ int write_config_file(long port, long speed_limit)
     return ERROR;
 
   if (getcwd(root_dir,PATH_MAX) == NULL)
+  {
+    fclose(fp);
     return ERROR;
+  }
 
-  fprintf(fp,"%d\n%s\n%ld\n%ld\n",getpid(),root_dir, port, speed_limit);
+  fprintf(fp,"%s\n%ld\n%ld\n", root_dir, port, speed_limit);
 
   fclose(fp);
   return SUCCESS;
+}
+int change_listen_socket(long *port, long new_port, int *server_socket)
+{
+  int ret = 0;
+
+  if (*port == new_port)
+    return SUCCESS;
+
+  *port = new_port;
+  ret = make_listening_socket(new_port);
+
+  if (ret < 0)
+    return ERROR;
+  if (*server_socket)
+    close(*server_socket);
+  *server_socket = ret;
+  return ret;
 }
