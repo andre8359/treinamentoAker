@@ -13,7 +13,10 @@ int create_socket(int family, int type)
   if ((socket_id = socket(family, type, 0)) < 0)
     return ERROR;
   if (setsockopt(socket_id, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) <  0)
+  {
+    close(socket_id);
     return ERROR;
+  }
   return socket_id;
 }
 /*!
@@ -84,7 +87,7 @@ int accept_new_connection(const int socket_id)
   return new_socket_id;
 }
 
-int make_local_socket(char *socket_name, int socket_name_size)
+int make_local_socket(char *socket_name)
 {
   struct sockaddr_un client_addr;
   int socket_id = 0;
@@ -94,7 +97,7 @@ int make_local_socket(char *socket_name, int socket_name_size)
   unlink(socket_name);
 
   client_addr.sun_family = PF_LOCAL;
-  strncpy(client_addr.sun_path, socket_name, socket_name_size );
+  strncpy(client_addr.sun_path, socket_name, strlen(socket_name));
 
   socket_id = create_socket(client_addr.sun_family, SOCK_DGRAM);
   if (socket_id <= 0)
@@ -104,5 +107,8 @@ int make_local_socket(char *socket_name, int socket_name_size)
   if (ret < 0)
     return ERROR;
 
+  if (connect(socket_id, (struct sockaddr *) &client_addr,
+              sizeof(client_addr)) < 0)
+    return ERROR;
   return socket_id;
 }
