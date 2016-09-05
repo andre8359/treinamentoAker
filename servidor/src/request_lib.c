@@ -169,7 +169,15 @@ void print_request_file_list(struct request_file **head)
     aux = aux->next;
   }
 }
-
+/*!
+ * \brief Realiza insercao na fila, inserindo sempre ao fim.
+ * \param[in] manager Estrutura que contem o ponteiro pro inicio da fila e a
+ *  quantidade de requisicoes pendentes.
+ * \param[in]  request  ponteiro pra estrutura com as informacoes da nova
+ * requisicao.
+ * \return  NULL em caso de erro.
+ * \return  Ponteiro para requisicao inserida em caso de sucesso.
+ */
 struct request_io *enqueue_request_io(struct manager_io **manager,
                                       struct request_io *request)
 {
@@ -200,7 +208,13 @@ struct request_io *enqueue_request_io(struct manager_io **manager,
   m->total_request++;
   return new_request;
 }
-
+/*!
+ * \brief Realiza remocao de uma requisicao da fila, removendo sempre do comeco.
+ * \param[in] manager Estrutura que contem o ponteiro pro inicio da fila e a
+ *  quantidade de requisicoes pendentes.
+ * \return  NULL em caso de erro.
+ * \return  Ponteiro para requisicao removida em caso de sucesso.
+ */
 struct request_io *dequeue_request_io(struct manager_io **manager)
 {
   struct manager_io *m = *manager;
@@ -215,7 +229,16 @@ struct request_io *dequeue_request_io(struct manager_io **manager)
 
   return aux;
 }
-
+/*!
+ * \brief Realiza remocao de uma requisicao da fila, removendo a requisicao com
+ * o mesmo valor do socket_id informado.
+ * \param[in]  socket_id  Descritor do socket da conexao que originou a
+ *  requisicao.
+ * \param[in] manager Estrutura que contem o ponteiro pro inicio da fila e a
+ *  quantidade de requisicoes pendentes.
+ * \return  NULL em caso de erro.
+ * \return  Ponteiro para requisicao removida em caso de sucesso.
+ */
 struct request_io *dequeue_request_io_with_socket_id(const int socket_id,
                                                      struct manager_io **manager)
 {
@@ -244,13 +267,21 @@ struct request_io *dequeue_request_io_with_socket_id(const int socket_id,
 
   return aux;
 }
+/*!
+ * \brief Realiza liberacao de uma requisicao.
+ * \param[in] request Ponteiro para requisicao que sera liberada.
+ */
 void free_request_io(struct request_io **request)
 {
   struct request_io *r = *request;
   free(r);
   r = NULL;
 }
-
+/*!
+ * \brief Realiza liberacao de uma lista de requisicoes.
+ * \param[in] manager Estrutura que contem o ponteiro pro inicio da fila e a
+ *  quantidade de requisicoes pendentes.
+ */
 void free_request_io_list(struct manager_io **manager)
 {
   struct manager_io *m = *manager;
@@ -266,36 +297,3 @@ void free_request_io_list(struct manager_io **manager)
   m->total_request = 0;
 }
 
-void rm_request_io(const int socket_id, struct manager_io **manager)
-{
-  struct manager_io *m = *manager;
-  struct request_io *node = NULL, *prev_node = NULL;
-
-  node = m->head;
-  if (node == NULL)
-    return;
-
-  while (node)
-  {
-    if ((prev_node == NULL) && (node->socket_id == socket_id))
-    {
-      m->head = node->next;
-      free_request_io(&node);
-      m->total_request--;
-      node = m->head;
-    }
-    else if (node->socket_id == socket_id)
-    {
-      prev_node->next = node->next;
-      free_request_io(&node);
-      m->total_request--;
-      node = prev_node->next;
-    }
-    else
-    {
-      prev_node = node;
-      node = node->next;
-    }
-  }
-  return;
-}

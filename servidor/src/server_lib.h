@@ -77,6 +77,7 @@ int diff_time (struct timeval *result, struct timeval *x, struct timeval *y);
 int check_config_params(char *root_directory, long port, long speed_limit);
 int read_config_file(char *root_dir, long *port, long *speed_limit);
 int write_pid_file();
-int write_config_file(long port, long speed_limit);
+int write_config_file(const char *root_dir,long port, long speed_limit);
 int change_listen_socket(long *port, long new_port, int *server_socket);
+
 #endif /* SERVER_LIB_H */

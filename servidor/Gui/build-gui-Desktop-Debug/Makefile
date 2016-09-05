@@ -13,12 +13,12 @@ CXX           = g++
 DEFINES       = -DQT_GUI_LIB -DQT_CORE_LIB -DQT_SHARED
 CFLAGS        = -pipe -g -Wall -W -D_REENTRANT $(DEFINES)
 CXXFLAGS      = -pipe -g -Wall -W -D_REENTRANT $(DEFINES)
-INCPATH       = -I/usr/lib64/qt4/mkspecs/linux-g++ -I../gui -I/usr/include/QtCore -I/usr/include/QtGui -I/usr/include -I. -I. -I../gui -I.
+INCPATH       = -I/usr/lib64/qt4/mkspecs/linux-g++ -I../gui -I/usr/include/QtCore -I/usr/include/QtGui -I/usr/include -I. -I. -I../gui -I. -I../../src/
 LINK          = g++
-LFLAGS        = 
-LIBS          = $(SUBLIBS)  -L/usr/lib64 -lQtGui -lQtCore -lpthread 
+LFLAGS        =
+LIBS          = $(SUBLIBS)  -L/usr/lib64 -lQtGui -lQtCore -lpthread
 AR            = ar cqs
-RANLIB        = 
+RANLIB        =
 QMAKE         = /usr/bin/qmake-qt4
 TAR           = tar -cf
 COMPRESS      = gzip -9f
@@ -26,7 +26,7 @@ COPY          = cp -f
 SED           = sed
 COPY_FILE     = $(COPY)
 COPY_DIR      = $(COPY) -r
-STRIP         = 
+STRIP         =
 INSTALL_FILE  = install -m 644 -p
 INSTALL_DIR   = $(COPY_DIR)
 INSTALL_PROGRAM = install -m 755 -p
@@ -48,6 +48,11 @@ SOURCES       = ../gui/main.cpp \
 OBJECTS       = main.o \
 		mainwindow.o \
 		moc_mainwindow.o
+C_OBJECTS = ../../obj/http_utils.o \
+		../../obj/request_lib.o \
+		../../obj/server_lib.o \
+		../../obj/socket_utils.o \
+		../../obj/thread_utils.o
 DIST          = /usr/lib64/qt4/mkspecs/common/unix.conf \
 		/usr/lib64/qt4/mkspecs/common/linux.conf \
 		/usr/lib64/qt4/mkspecs/common/gcc-base.conf \
@@ -101,8 +106,8 @@ first: all
 
 all: Makefile $(TARGET)
 
-$(TARGET): ui_mainwindow.h $(OBJECTS)  
-	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS) $(OBJCOMP) $(LIBS)
+$(TARGET): ui_mainwindow.h $(OBJECTS)
+	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS) $(OBJCOMP) $(C_OBJECTS) $(LIBS)
 	{ test -n "$(DESTDIR)" && DESTDIR="$(DESTDIR)" || DESTDIR=.; } && test $$(gdb --version | sed -e 's,[^0-9][^0-9]*\([0-9]\)\.\([0-9]\).*,\1\2,;q') -gt 72 && gdb --nx --batch --quiet -ex 'set confirm off' -ex "save gdb-index $$DESTDIR" -ex quit '$(TARGET)' && test -f $(TARGET).gdb-index && objcopy --add-section '.gdb_index=$(TARGET).gdb-index' --set-section-flags '.gdb_index=readonly' '$(TARGET)' '$(TARGET)' && rm -f $(TARGET).gdb-index || true
 
 Makefile: ../gui/gui.pro  /usr/lib64/qt4/mkspecs/linux-g++/qmake.conf /usr/lib64/qt4/mkspecs/common/unix.conf \
@@ -209,8 +214,7 @@ compiler_yacc_impl_make_all:
 compiler_yacc_impl_clean:
 compiler_lex_make_all:
 compiler_lex_clean:
-compiler_clean: compiler_moc_header_clean compiler_uic_clean 
-
+compiler_clean: compiler_moc_header_clean compiler_uic_clean
 ####### Compile
 
 main.o: ../gui/main.cpp ../gui/mainwindow.h
@@ -220,7 +224,7 @@ mainwindow.o: ../gui/mainwindow.cpp ../gui/mainwindow.h \
 		ui_mainwindow.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow.o ../gui/mainwindow.cpp
 
-moc_mainwindow.o: moc_mainwindow.cpp 
+moc_mainwindow.o: moc_mainwindow.cpp
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_mainwindow.o moc_mainwindow.cpp
 
 ####### Install

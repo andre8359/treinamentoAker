@@ -5,104 +5,24 @@
  * \author Andre Dantas <andre.dantas@aker.com.br>
  */
 #include "server_lib.h"
+/* Headers de funcoes estaticas */
 
 static int prepare_request_io(struct request_file *request,
                               struct request_io *request_thread,
-                              int buf_size)
-{
-  const int file_name_size = strlen(request->file_name) + strlen("~part") + 1;
-  char file_name[file_name_size];
-
-  if (request->fd <= 0)
-  {
-    if (request->method == GET)
-    {
-      request->fd = open(request->file_name,O_RDONLY);
-      if (request->fd <= 0)
-        return ERROR;
-      memset(request->buffer, 0, BUFSIZE);
-    }
-    else
-    {
-      snprintf(file_name, file_name_size, "%s~part", request->file_name);
-
-      request->fd = open(file_name,O_WRONLY|O_CREAT, S_IRUSR | S_IWUSR);
-      if (request->fd <= 0)
-        return ERROR;
-    }
-  }
-
-  request_thread->socket_id = request->socket_id;
-  request_thread->fd = request->fd;
-  request_thread->method = request->method;
-  request_thread->buffer = request->buffer;
-  request_thread->offset = request->transferred_size;
-  request_thread->next = NULL;
-
-  buf_size = (buf_size > (request->file_size - request->transferred_size)
-              ? request->file_size - request->transferred_size : buf_size);
-
-  request_thread->size = buf_size;
-  request->sended_last_pack = 1;
-
-  return SUCCESS;
-}
+                              int buf_size);
 static int split_request_from_data(struct request_file *request,
-                                   struct manager_io **manager)
-{
-  char *begin_data = NULL;
-  int buf_size = 0;
-  struct request_io request_thread;
-
-  begin_data = find_end_request(request->request);
-
-  if (begin_data == NULL || *begin_data == '\0')
-    return ERROR;
-
-  buf_size =  request->transf_last_sec - (begin_data - request->request);
-
-  memset(request->buffer, 0, BUFSIZE);
-  memcpy(request->buffer,begin_data, buf_size);
-
-  memset(&request_thread, 0, sizeof(struct request_io));
-
-  prepare_request_io(request, &request_thread, buf_size);
-
-  pthread_mutex_lock(&mutex);
-  enqueue_request_io(manager, &request_thread);
-  pthread_mutex_unlock(&mutex);
-
-  pthread_cond_signal(&cond);
-
-  return SUCCESS;
-}
+                                   struct manager_io **manager);
 static int get_info_after_end_request(struct request_file *request,
-                                      struct manager_io **manager)
-{
-  char *ch = find_end_request(request->request);
-  if (ch != NULL)
-  {
-    check_request_info(request);
+                                      struct manager_io **manager);
+static int check_if_transf_end(struct request_file *request);
 
-    if (request->status == OK)
-    {
-      if (request->method == GET)
-        check_file_ready_to_send(request);
-      else
-        check_file_ready_to_receive(request);
-    }
 
-    if (request->method == GET || request->status  != OK)
-      return READY_TO_SEND;
-
-    split_request_from_data(request, manager);
-    if (request->transferred_size == request->file_size)
-      return ENDED_UPLOAD;
-    return READY_TO_RECEIVE;
-  }
-
-  return ERROR;
-}
+/*!
+ * \brief Checa se foi transferido todo o arquivo alvo.
+ * \param[in] request Estrutura com informacoes da requisicao.
+ * \return 0 caso tenha transfeido ate o fim.
+ * \return -1 caso ainda tenha dados para serem transferidos.
+ */
 static int check_if_transf_end(struct request_file *request)
 {
   if ((request->transferred_size >= request->file_size && request->file_size))
@@ -110,6 +30,12 @@ static int check_if_transf_end(struct request_file *request)
   return ERROR;
 }
 
+/*!
+ * \brief Checa se foi transferido todo o arquivo alvo.
+ * \param[in] request Estrutura com informacoes da requisicao.
+ * \return 0 caso tenha transfeido ate o fim.
+ * \return -1 caso ainda tenha dados para serem transferidos.
+ */
 int check_speed_limit(struct request_file* request, long speed_limit)
 {
   calc_if_sec_had_pass(&request);
@@ -149,7 +75,7 @@ static int delete_uncompleted_downloaded_file(struct request_file *request)
   return unlink(downloaded_file_name);
 }
 static struct request_file *set_method_equals_get(const int socket_id,
-                                                  struct request_file **head)
+                                                 struct request_file **head)
 {
   struct request_file *request = NULL;
 
@@ -204,7 +130,8 @@ static int check_if_file_exists(char *file_name)
  * \brief Recebe a requisicao do cliente conectado.
  * \param[in] socket_id Descritor do socket da conexao.
  * \param[in] head Ponteiro para o primeiro item da lista de requisicoes.
- * \return Retorna 0 caso tenha recebido o fim da requisicao ou -1 caso nao.
+ * \return 0 caso tenha recebido o fim da requisicao
+ * \return -1 caso nao tenha recebido o fim da requisicao.
  */
 int receive_request_from_client(const int socket_id,
                                 struct request_file **head,
@@ -255,6 +182,85 @@ int receive_request_from_client(const int socket_id,
   return get_info_after_end_request(request, manager);
 }
 
+/*!
+ * \brief Escreve a informacao enviada apos a requisicao (caso metodo seja PUT),
+ * ou nao tenha informacao alerta sobre o fim do request.
+ * \param[in] request Estrutura com informacoes da requisicao.
+ * \param[in] manager Estrutura com um ponteiro para o comeco da lista de
+ * requisicoes de read/write.
+ * \return READY_TO_SEND Caso tenha recebido o fim da requisicao de um metodo
+ * GET.
+ * \return ENED_UPLOAD Caso a quantidade de dados recebidos seja igual ao
+ * tamanho do arquivo.
+ * \return READY_TO_RECEIVE Caso tenha encontrado o fim da requisicao, escrito
+ * os dados caso tenham, e ainda ha dados a serem recebidos (PUT).
+ * \return -1 caso nao tenha recebido o fim da requisicao.
+ */
+static int get_info_after_end_request(struct request_file *request,
+                                      struct manager_io **manager)
+{
+  char *ch = find_end_request(request->request);
+  if (ch != NULL)
+  {
+    check_request_info(request);
+
+    if (request->status == OK)
+    {
+      if (request->method == GET)
+        check_file_ready_to_send(request);
+      else
+        check_file_ready_to_receive(request);
+    }
+
+    if (request->method == GET || request->status  != OK)
+      return READY_TO_SEND;
+
+    split_request_from_data(request, manager);
+    if (request->transferred_size == request->file_size)
+      return ENDED_UPLOAD;
+    return READY_TO_RECEIVE;
+  }
+
+  return ERROR;
+}
+
+/*!
+ * \brief Escreve dados recebidos apos o fim da requisicao.
+ * \param[in] request Estrutura com informacoes da requisicao.
+ * \param[in] manager Estrutura com um ponteiro para o comeco da lista de
+ * requisicoes de read/write.
+ * \return 0 caso tenha dados e eles forem enviados para escrita com sucesso.
+ * \return -1 caso nao tenha recebido o fim da requisicao.
+ */
+static int split_request_from_data(struct request_file *request,
+                                   struct manager_io **manager)
+{
+  char *begin_data = NULL;
+  int buf_size = 0;
+  struct request_io request_thread;
+
+  begin_data = find_end_request(request->request);
+
+  if (begin_data == NULL || *begin_data == '\0')
+    return ERROR;
+
+  buf_size =  request->transf_last_sec - (begin_data - request->request);
+
+  memset(request->buffer, 0, BUFSIZE);
+  memcpy(request->buffer,begin_data, buf_size);
+
+  memset(&request_thread, 0, sizeof(struct request_io));
+
+  prepare_request_io(request, &request_thread, buf_size);
+
+  pthread_mutex_lock(&mutex);
+  enqueue_request_io(manager, &request_thread);
+  pthread_mutex_unlock(&mutex);
+
+  pthread_cond_signal(&cond);
+
+  return SUCCESS;
+}
 int receive_from_client(const int socket_id,
                         struct request_file **head,
                         struct manager_io **manager,
@@ -293,6 +299,55 @@ int receive_from_client(const int socket_id,
   pthread_cond_signal(&cond);
 
   return READY_TO_RECEIVE;
+}
+
+/*!
+ * \brief Seta as informacoes necessarias para se criar uma requisicao de io.
+ * \param[in] request Requisicao de transferencia de arquivo.
+ * \param[out] request_thread  Requisicao de read/write.
+ * \return 0 caso tenha copiado os dados com sucesso.
+ * \return -1 caso nao .
+ */
+static int prepare_request_io(struct request_file *request,
+                              struct request_io *request_thread,
+                              int buf_size)
+{
+  const int file_name_size = strlen(request->file_name) + strlen("~part") + 1;
+  char file_name[file_name_size];
+
+  if (request->fd <= 0)
+  {
+    if (request->method == GET)
+    {
+      request->fd = open(request->file_name,O_RDONLY);
+      if (request->fd <= 0)
+        return ERROR;
+      memset(request->buffer, 0, BUFSIZE);
+    }
+    else
+    {
+      snprintf(file_name, file_name_size, "%s~part", request->file_name);
+
+      request->fd = open(file_name,O_WRONLY|O_CREAT, S_IRUSR | S_IWUSR);
+      if (request->fd <= 0)
+        return ERROR;
+    }
+  }
+
+  request_thread->socket_id = request->socket_id;
+  request_thread->fd = request->fd;
+  request_thread->method = request->method;
+  request_thread->buffer = request->buffer;
+  request_thread->offset = request->transferred_size;
+  request_thread->next = NULL;
+
+  buf_size = (buf_size > (request->file_size - request->transferred_size)
+              ? request->file_size - request->transferred_size : buf_size);
+
+  request_thread->size = buf_size;
+  request->sended_last_pack = 1;
+
+  return SUCCESS;
 }
 
 /*!
@@ -888,26 +943,21 @@ int write_pid_file()
   fclose(fp);
   return SUCCESS;
 }
-int write_config_file(long port, long speed_limit)
+
+int write_config_file(const char *root_dir, long port, long speed_limit)
 {
   FILE *fp;
-  char root_dir[PATH_MAX];
 
   fp = fopen(CONFIG_FILE_PATH, "w");
   if (fp == NULL)
     return ERROR;
-
-  if (getcwd(root_dir,PATH_MAX) == NULL)
-  {
-    fclose(fp);
-    return ERROR;
-  }
 
   fprintf(fp,"%s\n%ld\n%ld\n", root_dir, port, speed_limit);
 
   fclose(fp);
   return SUCCESS;
 }
+
 int change_listen_socket(long *port, long new_port, int *server_socket)
 {
   int ret = 0;

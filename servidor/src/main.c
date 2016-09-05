@@ -77,7 +77,10 @@ int main(int argc,  char *argv[])
 
   if (write_pid_file())
     goto on_error;
-  if (write_config_file(port,speed_limit))
+
+  if (getcwd(new_root_dir,PATH_MAX) == NULL)
+    goto on_error;
+  if (write_config_file(new_root_dir, port,speed_limit))
     goto on_error;
 
   signal(SIGINT, clean_up);
@@ -112,7 +115,7 @@ int main(int argc,  char *argv[])
 
       FD_CLR (server_socket, &active_read_fd_set);
       FD_CLR (server_socket, &read_fd_set);
-      if (change_listen_socket(&port, new_port, &server_socket))
+      if (change_listen_socket(&port, new_port, &server_socket) < 0)
         goto on_config_error;
 
       speed_limit = (new_sp) ? new_sp : LONG_MAX;

@@ -6,7 +6,7 @@
  */
 #include "http_utils.h"
 
-/* Resposta padrao */
+/*Cabecalhos de resposta padrao */
 const char *status_conection[] =
 {
   "HTTP/1.0 200 OK\r\n",
@@ -69,10 +69,10 @@ static void get_request_info(struct request_file *request);
 static char *set_content_type(const char *file_name);
 static char *set_content_length(const char *file_name, long *file_size);
 static char *get_date();
+
 /*!
  * \brief Encontra fim de requisicao.
  * \param[in] request String que representa a requisicao.
- *  do socket.
  * \return Retona o descritor do socket em caso de sucesso ou ERROR em caso de
  *  falha.
  */
@@ -92,7 +92,10 @@ char *find_end_request(char *request)
 
   return NULL;
 }
-
+/*!
+ * \brief Checa se os valores enviados pela requisicao sao validos.
+ * \param[in] request Estrutura request_file com as informacoes da requisicao.
+ */
 void check_request_info(struct request_file *request)
 {
   get_request_info(request);
@@ -117,7 +120,7 @@ on_error:
  * \brief Le as informacoes da requisicao (GET -> nome do arquivo requisitado,
  * PUT -> nome e tamanho do arquivo requisitado.
  * \param p Estrutura que contem as informacoes sobre a requisicao.
- * \return Retona 0 em caso de suceso ou -1 em caso de falha.
+ * \return Retona 0 em caso de sucesso ou -1 em caso de falha.
  */
 static void get_request_info(struct request_file *request)
 {
@@ -178,6 +181,12 @@ static long get_content_length(struct request_file *request)
     return ERROR;
   return file_length;
 }
+/*!
+ * \brief Le o valor de nome do arquivo requisitado.
+ * \param[in] input_path String com o path_file enviado na requisicao.
+ * \return Retona 0 em caso de sucessoo.
+ * \return ERROR  -1 em caso de erro.
+ */
 static int get_file_name(char *input_path)
 {
   if (!strncmp(input_path,"..",3))
@@ -205,7 +214,7 @@ char *str_dup(const char *str)
  * \brief Seta informacoes da resposta a requisicao como uma das padroes (Bad
  *  Request, Not Foud, etc).
  * \param p Estrutura que contem as informacoes sobre a requisicao.
- * \return Retona 0 em caso de suceso ou -1 em caso de falha.
+ * \return Retona 0 em caso de sucesso ou -1 em caso de falha.
  */
 int set_std_response(struct request_file *r)
 {
@@ -233,6 +242,12 @@ int set_std_response(struct request_file *r)
   }
   return SUCCESS;
 }
+/*!
+ * \brief Cria a string com o conteudo do header de resposta para a requisicao.
+ * \param request Estrutura que contem as informacoes sobre a requisicao.
+ * \return 0 em caso de sucesso.
+ * \return -1 em caso de falha.
+ */
 char *make_header(struct request_file *request)
 {
   const char server[] = "Server: Cacique/0.0.1\r\n";
@@ -262,6 +277,15 @@ char *make_header(struct request_file *request)
 
   return header;
 }
+
+/*!
+ * \brief Cria a string com o Content-Length do arquivo que sera enviado.
+ * \param [in]file_name Nome do arquivo requisitado.
+ * \param [out]file_size Ponteiro para long onde sera armazenado o tamanho do
+ * arquivo requisitado em bytes.
+ * \return Ponteiro para string como tamanho do arquivo em caso de sucesso.
+ * \return NULL em caso de falha.
+ */
 static char *set_content_length(const char *file_name, long *file_size)
 {
   struct stat st;
@@ -286,6 +310,12 @@ static char *set_content_length(const char *file_name, long *file_size)
   }
   return content_length;
 }
+/*!
+ * \brief Cria a string com o Content-Type do arquivo que sera enviado.
+ * \param [in]file_name Nome do arquivo requisitado.
+ * \return Ponteiro para string como content-type do arquivo em caso de sucesso.
+ * \return NULL em caso de falha.
+ */
 static char *set_content_type(const char *file_name)
 {
   const char *type[] =
@@ -322,6 +352,13 @@ static char *set_content_type(const char *file_name)
 
   return content_type;
 }
+
+/*!
+ * \brief Cria a string com o data/hora do envio.
+ * \return Ponteiro para string como data/hora do envio do arquivo requisitado
+ * em caso de sucesso.
+ * \return NULL em caso de falha.
+ */
 static char *get_date()
 {
   const char *weekday[] = { "Sun", "Mon", "Tue", "Thu", "Fri", "Sat"};
@@ -340,6 +377,11 @@ static char *get_date()
            local->tm_year+1900, local->tm_hour, local->tm_min, local->tm_sec);
   return date;
 }
+/*!
+ * \brief Cria arquivos de reposta padrao.
+ * \return 0 em caso de sucesso.
+ * \return -1 em caso de falha.
+ */
 int create_default_response_files()
 {
   FILE *fp = NULL;

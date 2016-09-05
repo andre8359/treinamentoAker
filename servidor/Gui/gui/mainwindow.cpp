@@ -8,6 +8,11 @@
 #include <climits>
 #include <signal.h>
 
+extern "C"
+{
+  #include "../../src/server_lib.h"
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -39,43 +44,16 @@ bool MainWindow::read_pid_server()
 }
 bool MainWindow::load_config()
 {
-    FILE *fp;
-    int ret = 0;
     char root_dir[PATH_MAX];
-    int port = 0;
+    long port = 0;
     long speed_limmit = 0;
 
-    fp = fopen(CONFIG_FILE_PATH,"r");
-    if (fp == NULL)
-        return false;
-    ret = fscanf(fp,"%s\n%d\n%ld\n", root_dir, &port, &speed_limmit);
-    fclose(fp);
+    read_config_file(root_dir, &port, &speed_limmit);
 
-    if (ret < 3)
-        return false;
     ui->txt_root_dir->setText(root_dir);
     ui->txt_port->setText(QString::number(port));
     ui->txt_speed_limit->setText(QString::number(speed_limmit));
     ui->cb_speed_limit->setCurrentIndex(0);
-    return true;
-}
-
-bool MainWindow::write_config_file()
-{
-    FILE *fp;
-
-    if (!this->read_pid_server())
-        return false;
-
-    fp = fopen(CONFIG_FILE_PATH,"w");
-    if (fp == NULL)
-        return false;
-
-    fprintf(fp,"%s\n%d\n%ld\n",
-            ui->txt_root_dir->text().toUtf8().constData(),
-            ui->txt_port->text().toInt(),
-            ui->txt_speed_limit->text().toLong() * this->speed_rate);
-    fclose(fp);
     return true;
 }
 
@@ -146,7 +124,9 @@ void MainWindow::on_bt_apply_clicked()
         msg_error = "Erro ao ler pid do servidor!";
         goto on_error;
     }
-    if (this->write_config_file() == false)
+    if (write_config_file(ui->txt_root_dir->text().toStdString().c_str(),
+                         ui->txt_port->text().toLong(),
+                         ui->txt_speed_limit->text().toLong()))
     {
         msg_error = "Erro ao criar arquivo de configuracao!";
         goto on_error;
